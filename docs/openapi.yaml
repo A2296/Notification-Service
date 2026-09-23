@@ -8,9 +8,12 @@ info:
 
     ## Getting started
     1. `POST /api/v1/auth/register` to create your business account (returns a dashboard token).
-    2. `POST /api/v1/api-keys` with that token to get an **API key + secret** (the secret is shown once).
-    3. Call the integration endpoints from your **backend** with the headers
-       `X-API-Key` and `X-API-Secret`. Never put the secret in browser or mobile code.
+       Already registered (409)? Use `POST /api/v1/auth/login` to get a token instead.
+    2. Click **Authorize**, paste the token under **BearerAuth**, then
+       `POST /api/v1/api-keys` to get an **API key + secret** (the secret is shown once).
+    3. Click **Authorize** again and enter them under **ApiKey** and **ApiSecret** to call the
+       integration endpoints. In your own systems, send the headers `X-API-Key` and
+       `X-API-Secret` from your **backend**. Never put the secret in browser or mobile code.
 
     ## Delivery lifecycle
     `PENDING` → `PROCESSING` → `SENT` (accepted by provider) → `DELIVERED` (confirmed)
