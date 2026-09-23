@@ -6,6 +6,14 @@ const tooManyRequests = {
   message: "Too many requests, please try again later.",
 };
 
+// Per IP on all of /api: runs before authentication, so floods of
+// requests with invalid credentials cannot hammer the database
+const ipLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: config.rateLimit.ipMaxPerMinute,
+  message: tooManyRequests,
+});
+
 // Per IP: protects login/register from brute force
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -23,6 +31,7 @@ const businessLimiter = rateLimit({
 });
 
 module.exports = {
+  ipLimiter,
   authLimiter,
   businessLimiter,
 };

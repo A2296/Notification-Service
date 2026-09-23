@@ -155,7 +155,7 @@ components:
       properties:
         id: { type: string }
         name: { type: string }
-        keyId: { type: string, example: ns_pk_3f9a1c2b7d4e5f60718293a4 }
+        keyId: { type: string, description: "Public key id, prefixed ns_pk_" }
         secretLast4: { type: string }
         lastUsedAt: { type: string, format: date-time, nullable: true }
         revokedAt: { type: string, format: date-time, nullable: true }
@@ -380,8 +380,8 @@ paths:
                 apiKey:
                   id: 66f1c0a2b3c4d5e6f7a8b9c0
                   name: Production server
-                  apiKey: ns_pk_3f9a1c2b7d4e5f60718293a4
-                  apiSecret: ns_sk_...
+                  apiKey: "<your-api-key-id>"
+                  apiSecret: "<shown-once-store-securely>"
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
     get:

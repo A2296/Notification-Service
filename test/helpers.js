@@ -4,8 +4,9 @@ process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = process.env.JWT_SECRET || "test-secret";
 process.env.AUTH_RATE_LIMIT_MAX = process.env.AUTH_RATE_LIMIT_MAX || "1000";
 process.env.RATE_LIMIT_MAX = process.env.RATE_LIMIT_MAX || "1000";
+process.env.IP_RATE_LIMIT_MAX = process.env.IP_RATE_LIMIT_MAX || "10000";
 
-const path = require("path");
+const path = require("node:path");
 const mongoose = require("mongoose");
 const request = require("supertest");
 const bcrypt = require("bcryptjs");

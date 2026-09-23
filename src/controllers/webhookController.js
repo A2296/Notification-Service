@@ -1,4 +1,4 @@
-const crypto = require("crypto");
+const crypto = require("node:crypto");
 const Notification = require("../models/notificationSchema");
 const config = require("../config");
 
@@ -12,10 +12,12 @@ const isValidTwilioSignature = (req) => {
     return false;
   }
 
-  const url = `${config.publicBaseUrl}${req.originalUrl}`;
+  const url = config.publicBaseUrl + req.originalUrl;
   const params = req.body || {};
+  // Twilio sorts by raw character code (not locale order), so compare code units
+  const byCodeUnit = (a, b) => (a < b ? -1 : Number(a > b));
   const payload = Object.keys(params)
-    .sort()
+    .sort(byCodeUnit)
     .reduce((acc, key) => acc + key + params[key], url);
 
   const expected = crypto
@@ -37,9 +39,19 @@ const twilioStatusCallback = async (req, res) => {
   }
 
   const { MessageSid, MessageStatus, ErrorCode } = req.body;
-  const notification = MessageSid
-    ? await Notification.findOne({ provider: "twilio", providerMessageId: MessageSid })
-    : null;
+
+  // Repeated form fields arrive as arrays; only plain strings may reach the query
+  if (typeof MessageSid !== "string" || typeof MessageStatus !== "string") {
+    return res.status(400).json({
+      success: false,
+      message: "MessageSid and MessageStatus are required",
+    });
+  }
+
+  const notification = await Notification.findOne({
+    provider: "twilio",
+    providerMessageId: { $eq: MessageSid },
+  });
 
   // Always 2xx for unknown messages so Twilio does not keep retrying
   if (!notification) {
@@ -54,7 +66,8 @@ const twilioStatusCallback = async (req, res) => {
 
   if (["failed", "undelivered"].includes(MessageStatus) && notification.status !== "FAILED") {
     notification.failedAt = new Date();
-    notification.failureReason = `Twilio status ${MessageStatus}${ErrorCode ? ` (error ${ErrorCode})` : ""}`;
+    const errorSuffix = ErrorCode ? ` (error ${ErrorCode})` : "";
+    notification.failureReason = `Twilio status ${MessageStatus}${errorSuffix}`;
     notification.addEvent("FAILED", notification.failureReason);
     await notification.save();
   }

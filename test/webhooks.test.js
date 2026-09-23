@@ -4,7 +4,7 @@ process.env.TWILIO_AUTH_TOKEN = "test-twilio-token";
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const crypto = require("crypto");
+const crypto = require("node:crypto");
 const { app, request, connect, disconnect, createBusiness } = require("./helpers");
 const Notification = require("../src/models/notificationSchema");
 const deliveryWorker = require("../src/services/deliveryWorker");
@@ -98,6 +98,17 @@ test("callbacks with an invalid signature are rejected", async () => {
 
   const unchanged = await Notification.findById(notification._id);
   assert.equal(unchanged.status, "SENT");
+});
+
+test("correctly signed callbacks with repeated fields are rejected before any query", async () => {
+  // Repeated form fields parse as an array, which stringifies to "SM1,SM2" when signing
+  const res = await request(app)
+    .post(WEBHOOK_PATH)
+    .set("X-Twilio-Signature", sign({ MessageSid: "SM1,SM2", MessageStatus: "delivered" }))
+    .type("form")
+    .send("MessageSid=SM1&MessageSid=SM2&MessageStatus=delivered");
+
+  assert.equal(res.status, 400);
 });
 
 test("callbacks for unknown messages are acknowledged and ignored", async () => {

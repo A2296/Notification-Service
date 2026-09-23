@@ -1,4 +1,4 @@
-const crypto = require("crypto");
+const crypto = require("node:crypto");
 
 // API secrets are 32 random bytes, so a fast SHA-256 hash is sufficient
 // (bcrypt is only needed for low-entropy human passwords)

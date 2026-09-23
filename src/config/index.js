@@ -5,6 +5,8 @@ const config = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "1d",
 
   rateLimit: {
+    // per IP per minute on everything under /api (first line of defence)
+    ipMaxPerMinute: Number(process.env.IP_RATE_LIMIT_MAX) || 600,
     // per IP on /api/v1/auth (login/register brute-force protection)
     authMax: Number(process.env.AUTH_RATE_LIMIT_MAX) || 20,
     // per business (API key or dashboard user) per minute on the rest of the API

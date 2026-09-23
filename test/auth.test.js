@@ -114,6 +114,19 @@ test("unknown routes return JSON 404", async () => {
   assert.equal(res.body.success, false);
 });
 
+test("cross-origin browser calls are not allowed by default", async () => {
+  const res = await request(app)
+    .get("/health")
+    .set("Origin", "https://evil.example.com");
+  assert.equal(res.headers["access-control-allow-origin"], undefined);
+});
+
+test("a per-IP rate limit applies to all API routes, even without credentials", async () => {
+  const res = await request(app).get("/api/v1/auth/me");
+  assert.equal(res.status, 401);
+  assert.ok(res.headers["x-ratelimit-limit"]);
+});
+
 test("API docs are served", async () => {
   const spec = await request(app).get("/openapi.json");
   assert.equal(spec.status, 200);
