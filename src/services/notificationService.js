@@ -3,6 +3,8 @@ const { sendEmail } = require("./emailService");
 const { sendSMS } = require("./smsService");
 const { sendInAppNotification } = require("./inAppService");
 
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const createNotification = async ({
   userId,
   recipient,
@@ -76,10 +78,14 @@ const getUserNotifications = async (
   };
 
   if (search) {
+    // Escape regex metacharacters so user input is matched literally
+    // (prevents crashes on input like "(" and regex DoS)
+    const pattern = new RegExp(escapeRegex(search), "i");
+
     query.$or = [
-      { recipient: { $regex: search, $options: "i" } },
-      { subject: { $regex: search, $options: "i" } },
-      { message: { $regex: search, $options: "i" } },
+      { recipient: pattern },
+      { subject: pattern },
+      { message: pattern },
     ];
   }
 
@@ -92,7 +98,7 @@ const getUserNotifications = async (
   }
 
   const currentPage = Number(page) || 1;
-  const itemsPerPage = Number(limit) || 10;
+  const itemsPerPage = Math.min(Number(limit) || 10, 100);
 
   const skip = (currentPage - 1) * itemsPerPage;
 

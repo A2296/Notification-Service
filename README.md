@@ -77,7 +77,13 @@ NotificationService/
 │   │
 │   └── server.js
 │
-├── .env
+├── scripts/
+│   └── createAdmin.js
+├── test/
+│   └── api.test.js
+├── .env.example
+├── Dockerfile
+├── docker-compose.yml
 ├── .gitignore
 ├── app.js
 ├── package.json
@@ -92,6 +98,44 @@ Node.js
 npm
 MongoDB / MongoDB Atlas
 
+
+## Getting Started
+
+### Option A: Docker (recommended, no local MongoDB needed)
+
+```bash
+docker compose up --build -d
+docker compose exec api npm run seed:admin   # creates admin@example.com / ChangeMe123
+curl http://localhost:5000/health
+```
+
+### Option B: Local Node.js
+
+```bash
+npm install
+cp .env.example .env          # then edit DB_CONNECTION_STRING and JWT_SECRET
+npm run seed:admin            # optional: create an ADMIN user
+npm run dev                   # or: npm start
+```
+
+The server refuses to start if `DB_CONNECTION_STRING` or `JWT_SECRET` is missing.
+
+### Running tests
+
+Tests are integration tests against a real MongoDB:
+
+```bash
+docker run -d -p 27017:27017 --name mongo-test mongo:7
+npm test
+```
+
+Override the database with `TEST_DB_URL`. GitHub Actions runs the tests, `npm audit` and a Docker build on every push to `main` and on every pull request (`.github/workflows/ci.yml`).
+
+### Health check
+
+`GET /health` returns `200 {"status":"ok"}` when the database is connected, `503` otherwise.
+
+---
 
 API Endpoints
 Authentication
