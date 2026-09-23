@@ -14,11 +14,14 @@ if (process.env.TRUST_PROXY) {
 app.use(helmet());
 app.use(express.json({ limit: "100kb" }));
 
-// Integrations are server-to-server; CORS only matters for a browser dashboard.
+// Integrations are server-to-server, so browsers are blocked from calling the API
+// cross-origin unless a dashboard origin is explicitly allowed:
 // CORS_ORIGIN=https://dashboard.example.com,https://admin.example.com
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",") : "*",
+    origin: process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
+      : false,
   })
 );
 
@@ -33,6 +36,9 @@ app.get("/health", (req, res) => {
 
 // Interactive API documentation at /docs, raw spec at /openapi.json
 app.use(require("./src/docs"));
+
+const { ipLimiter } = require("./src/middleware/rateLimiters");
+app.use("/api", ipLimiter);
 
 app.use("/api/v1", require("./src/routes"));
 

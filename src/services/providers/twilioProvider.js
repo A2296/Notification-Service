@@ -13,7 +13,8 @@ const createTwilioProvider = (smsConfig, publicBaseUrl) => {
   }
 
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
-  const authorization = `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString("base64")}`;
+  const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+  const authorization = `Basic ${credentials}`;
 
   return {
     name: "twilio",

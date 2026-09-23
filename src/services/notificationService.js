@@ -26,7 +26,7 @@ const resolveAddress = (channel, recipientInput, recipientDoc) => {
   }
 
   const field = channel === "EMAIL" ? "email" : "phone";
-  const address = recipientInput[field] || (recipientDoc && recipientDoc[field]);
+  const address = recipientInput[field] || recipientDoc?.[field];
 
   if (!address) {
     throw new HttpError(
@@ -38,60 +38,69 @@ const resolveAddress = (channel, recipientInput, recipientDoc) => {
   return address;
 };
 
+// Only copy contact fields the caller actually provided
+const pickContact = (recipient) =>
+  Object.fromEntries(
+    ["name", "email", "phone"]
+      .filter((field) => recipient[field])
+      .map((field) => [field, recipient[field]])
+  );
+
+// When the worker should first pick the notification up, and how to describe it
+const initialSchedule = (scheduledAt) => {
+  const now = new Date();
+
+  if (scheduledAt && scheduledAt > now) {
+    return {
+      nextAttemptAt: scheduledAt,
+      detail: `Scheduled for ${scheduledAt.toISOString()}`,
+    };
+  }
+
+  return { nextAttemptAt: now, detail: "Queued for delivery" };
+};
+
+const findByIdempotencyKey = (businessId, idempotencyKey) =>
+  Notification.findOne({ business: businessId, idempotencyKey });
+
 const createNotification = async ({ businessId, input, idempotencyKey }) => {
   if (idempotencyKey) {
-    const existing = await Notification.findOne({ business: businessId, idempotencyKey });
+    const existing = await findByIdempotencyKey(businessId, idempotencyKey);
     if (existing) {
       return { notification: existing, created: false };
     }
   }
 
   const { recipient } = input;
-  let recipientDoc = null;
-
-  if (recipient.id) {
-    const contact = {};
-    for (const field of ["name", "email", "phone"]) {
-      if (recipient[field]) {
-        contact[field] = recipient[field];
-      }
-    }
-    recipientDoc = await upsertRecipient(businessId, recipient.id, contact);
-  }
+  const recipientDoc = recipient.id
+    ? await upsertRecipient(businessId, recipient.id, pickContact(recipient))
+    : null;
 
   const to = resolveAddress(input.channel, recipient, recipientDoc);
-  const scheduledAt = input.scheduledAt || null;
-  const now = new Date();
+  const { nextAttemptAt, detail } = initialSchedule(input.scheduledAt);
 
   try {
     const notification = await Notification.create({
       business: businessId,
-      recipient: recipientDoc ? recipientDoc._id : null,
-      recipientExternalId: recipient.id || null,
+      recipient: recipientDoc?._id ?? null,
+      recipientExternalId: recipient.id ?? null,
       to,
       channel: input.channel,
       subject: input.subject,
       message: input.message,
-      metadata: input.metadata || {},
+      metadata: input.metadata ?? {},
       idempotencyKey,
-      scheduledAt,
-      nextAttemptAt: scheduledAt && scheduledAt > now ? scheduledAt : now,
+      scheduledAt: input.scheduledAt ?? null,
+      nextAttemptAt,
       maxAttempts: config.worker.maxAttempts,
-      events: [
-        {
-          status: "PENDING",
-          detail: scheduledAt && scheduledAt > now
-            ? `Scheduled for ${scheduledAt.toISOString()}`
-            : "Queued for delivery",
-        },
-      ],
+      events: [{ status: "PENDING", detail }],
     });
 
     return { notification, created: true };
   } catch (error) {
     // Two requests with the same Idempotency-Key raced; return the winner
     if (error.code === 11000 && idempotencyKey) {
-      const existing = await Notification.findOne({ business: businessId, idempotencyKey });
+      const existing = await findByIdempotencyKey(businessId, idempotencyKey);
       return { notification: existing, created: false };
     }
     throw error;

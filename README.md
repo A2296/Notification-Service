@@ -28,7 +28,7 @@ Built with Node.js, Express 5, MongoDB (Mongoose), Nodemailer and Twilio.
 | Validation | Every request is validated with zod and returns field-level error messages |
 | Security | Helmet headers, per-IP login rate limit, per-business API rate limit, NoSQL/regex injection protection, bcrypt passwords |
 | Operations | Docker, docker-compose (with a local email inbox), `/health`, graceful shutdown, GitHub Actions CI, Render blueprint |
-| Docs & tests | OpenAPI 3 spec + Swagger UI; 52 integration tests |
+| Docs & tests | OpenAPI 3 spec + Swagger UI; 55 integration tests |
 
 ---
 
@@ -218,7 +218,8 @@ see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#4-turn-on-real-delivery-optional).
 - Every query is scoped to the caller's business; cross-tenant access is covered by tests.
 - Suspended businesses are blocked on the next request (keys and tokens are checked against the database).
 - Request bodies and queries are validated and typed, which blocks NoSQL operator injection; search input is regex-escaped.
-- Login/register are rate limited per IP; the API is rate limited per business.
+- Every API request is rate limited per IP (before authentication), login/register more strictly, and each business has its own API quota.
+- Cross-origin browser access is disabled unless `CORS_ORIGIN` lists your dashboard origins.
 - Twilio callbacks are verified with the `X-Twilio-Signature` HMAC.
 - Helmet security headers; internal errors are logged, never returned to clients.
 
@@ -231,7 +232,7 @@ docker run -d -p 27017:27017 --name mongo-test mongo:7
 npm test
 ```
 
-52 integration tests run against a real MongoDB (override with `TEST_DB_URL`), covering auth,
+55 integration tests run against a real MongoDB (override with `TEST_DB_URL`), covering auth,
 API keys, sending on every channel, retries and failures, scheduling, crash recovery,
 idempotency, tenant isolation, admin controls and webhook signatures. Providers are swapped
 for fakes, so no email or SMS is sent. GitHub Actions runs the tests, `npm audit` and a

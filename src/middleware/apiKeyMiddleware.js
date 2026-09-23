@@ -8,18 +8,19 @@ const apiKeyMiddleware = async (req, res, next) => {
   const keyId = req.get("x-api-key");
   const secret = req.get("x-api-secret");
 
-  if (!keyId || !secret) {
+  if (typeof keyId !== "string" || typeof secret !== "string" || !keyId || !secret) {
     return res.status(401).json({
       success: false,
       message: "X-API-Key and X-API-Secret headers are required",
     });
   }
 
-  const apiKey = await ApiKey.findOne({ keyId, revokedAt: null }).populate(
-    "business"
-  );
+  const apiKey = await ApiKey.findOne({
+    keyId: { $eq: keyId },
+    revokedAt: null,
+  }).populate("business");
 
-  if (!apiKey || !apiKey.business || !secretMatches(secret, apiKey.secretHash)) {
+  if (!apiKey?.business || !secretMatches(secret, apiKey.secretHash)) {
     return res.status(401).json({
       success: false,
       message: "Invalid API credentials",
