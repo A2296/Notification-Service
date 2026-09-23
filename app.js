@@ -1,23 +1,26 @@
 const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
-const rateLimit = require("express-rate-limit");
 const mongoose = require("mongoose");
-
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: Number(process.env.RATE_LIMIT_MAX) || 100,
-  message: {
-    success: false,
-    message: "Too many requests, please try again later.",
-  },
-});
 
 const app = express();
 
+// Behind a load balancer/proxy (Render, Railway, Nginx) set TRUST_PROXY=1
+// so rate limiting sees the real client IP
+if (process.env.TRUST_PROXY) {
+  app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
+}
+
 app.use(helmet());
-app.use(express.json());
-app.use(cors());
+app.use(express.json({ limit: "100kb" }));
+
+// Integrations are server-to-server; CORS only matters for a browser dashboard.
+// CORS_ORIGIN=https://dashboard.example.com,https://admin.example.com
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",") : "*",
+  })
+);
 
 // Health check for Docker/CI/load balancers (not rate limited)
 app.get("/health", (req, res) => {
@@ -28,16 +31,10 @@ app.get("/health", (req, res) => {
   });
 });
 
-app.use("/api", apiLimiter);
+// Interactive API documentation at /docs, raw spec at /openapi.json
+app.use(require("./src/docs"));
 
-const authRoutes = require("./src/routes/authRoutes");
-app.use("/api/auth", authRoutes);
-
-const notificationRoutes = require("./src/routes/notificationRoutes");
-app.use("/api/notifications", notificationRoutes);
-
-const adminRoutes = require("./src/routes/adminRoutes");
-app.use("/api/admin", adminRoutes);
+app.use("/api/v1", require("./src/routes"));
 
 app.use((req, res) => {
   res.status(404).json({
