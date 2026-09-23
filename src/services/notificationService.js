@@ -3,7 +3,7 @@ const { sendEmail } = require("./emailService");
 const { sendSMS } = require("./smsService");
 const { sendInAppNotification } = require("./inAppService");
 
-const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 
 const createNotification = async ({
   userId,
