@@ -16,7 +16,7 @@ const apiKeyMiddleware = async (req, res, next) => {
   }
 
   const apiKey = await ApiKey.findOne({
-    keyId: { $eq: keyId },
+    keyId: { $eq: String(keyId) },
     revokedAt: null,
   }).populate("business");
 

@@ -50,7 +50,7 @@ const twilioStatusCallback = async (req, res) => {
 
   const notification = await Notification.findOne({
     provider: "twilio",
-    providerMessageId: { $eq: MessageSid },
+    providerMessageId: { $eq: String(MessageSid) },
   });
 
   // Always 2xx for unknown messages so Twilio does not keep retrying
