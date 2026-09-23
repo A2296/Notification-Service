@@ -1,4 +1,4 @@
-// Creates (or promotes) an ADMIN user so the /api/admin routes can be used.
+// Creates (or promotes) a platform ADMIN user for the /api/v1/admin routes.
 // Usage: ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=ChangeMe123 npm run seed:admin
 const dotenv = require("dotenv");
 dotenv.config({ quiet: true });
@@ -26,7 +26,7 @@ const run = async () => {
   const user = await User.findOneAndUpdate(
     { email },
     { name, email, password: hashedPassword, role: "ADMIN" },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: "after" }
   );
 
   console.log(`Admin user ready: ${user.email}`);

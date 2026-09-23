@@ -1,5 +1,7 @@
 const mongoose = require("mongoose");
 
+// A person who logs in to manage a business account (USER)
+// or to operate the whole platform (ADMIN)
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -25,6 +27,12 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["USER", "ADMIN"],
       default: "USER",
+    },
+
+    business: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      default: null,
     },
   },
   {
