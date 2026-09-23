@@ -1,9 +1,29 @@
 const errorMiddleware = (err, req, res, next) => {
-  console.error(err.stack);
+  // Malformed JSON body
+  if (err.type === "entity.parse.failed") {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid JSON in request body",
+    });
+  }
 
-  res.status(500).json({
+  // Mongoose validation / cast errors are client errors, not server errors
+  if (err.name === "ValidationError" || err.name === "CastError") {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid request data",
+    });
+  }
+
+  const status = err.status || err.statusCode || 500;
+
+  if (status >= 500) {
+    console.error(err.stack);
+  }
+
+  res.status(status).json({
     success: false,
-    message: "Internal Server Error",
+    message: status >= 500 ? "Internal Server Error" : err.message,
   });
 };
 

@@ -1,13 +1,29 @@
+const mongoose = require("mongoose");
 const notificationService = require("../services/notificationService");
+
+const isOptionalString = (value) =>
+  value === undefined || typeof value === "string";
 
 const createNotification = async (req, res, next) => {
   try {
-    const { recipient, channel, subject, message } = req.body;
+    const { recipient, channel, subject, message } = req.body || {};
 
     if (!recipient || !channel || !message) {
       return res.status(400).json({
         success: false,
         message: "Recipient, channel and message are required",
+      });
+    }
+
+    if (
+      typeof recipient !== "string" ||
+      typeof channel !== "string" ||
+      typeof message !== "string" ||
+      !isOptionalString(subject)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Recipient, channel, subject and message must be strings",
       });
     }
 
@@ -49,6 +65,14 @@ const getUserNotifications = async (req, res, next) => {
       page,
       limit,
     } = req.query;
+
+    // Repeated query params (?status=a&status=b) arrive as arrays
+    if (![search, channel, status, page, limit].every(isOptionalString)) {
+      return res.status(400).json({
+        success: false,
+        message: "Query parameters must not be repeated",
+      });
+    }
 
     const allowedStatuses = ["PENDING", "SENT", "FAILED"];
 
@@ -93,6 +117,13 @@ const getUserNotifications = async (req, res, next) => {
 
 const getNotificationById = async (req, res, next) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({
+        success: false,
+        message: "Notification not found",
+      });
+    }
+
     const notification = await notificationService.getNotificationById(
       req.params.id,
       req.user.id,
