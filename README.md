@@ -73,6 +73,23 @@ docker compose exec api npm run seed:admin   # platform admin: admin@example.com
 | http://localhost:5000/health | Health check |
 | http://localhost:8025 | **Mailpit**: every email the service sends appears here |
 
+Stop with `docker compose down`. Add `-v` to also wipe the database.
+
+### Try it in the browser (no curl needed)
+
+In http://localhost:5000/docs, open an endpoint, click **Try it out**, then **Execute**.
+
+1. **`POST /api/v1/auth/register`**: copy the `token` from the response.
+   A **409** means that email is already registered, so use **`POST /api/v1/auth/login`** to get a token instead.
+2. Click **Authorize** (top of the page), paste the token under **BearerAuth** (without the word "Bearer"), then **Authorize** → **Close**.
+3. **`POST /api/v1/api-keys`**: copy `apiKey` and `apiSecret` (the secret is shown only once).
+4. **Authorize** again: paste them under **ApiKey** and **ApiSecret**. You are now calling the API like a business's server would.
+5. **`POST /api/v1/notifications`**: returns **202** with status `PENDING`. Check **`GET /api/v1/notifications/{id}`** for the final status, and Mailpit for the email.
+
+A **401 "Authentication token is required"** means nothing was entered under Authorize: the
+**Curl** box of the request should include an `Authorization` or `X-API-Key` header.
+Authorization is remembered across page refreshes; use **Authorize → Logout** to clear it.
+
 ### Option B: Node.js + your own MongoDB
 
 ```bash
@@ -88,7 +105,9 @@ The server refuses to start if `DB_CONNECTION_STRING` or `JWT_SECRET` is missing
 
 ## Integrate in 3 steps
 
-Replace `$URL` with `http://localhost:5000` or your deployed URL.
+Replace `$URL` with `http://localhost:5000` or your deployed URL. These `curl` commands are for
+bash (macOS, Linux, **Git Bash** on Windows). In **Windows PowerShell**, `curl` is a different
+command, so use the [PowerShell version](#windows-powershell) below.
 
 **1. Register your business** (returns a dashboard token)
 
@@ -120,6 +139,33 @@ curl -X POST $URL/api/v1/notifications \
     "metadata": { "orderId": "1001" }
   }'
 # → 202 { "notification": { "id": "...", "status": "PENDING" } }
+```
+
+#### Windows PowerShell
+
+The same three steps with PowerShell's built-in `Invoke-RestMethod` (paste the whole block):
+
+```powershell
+$URL = "http://localhost:5000"
+
+# 1. Register your business (use /api/v1/auth/login with email + password if it already exists)
+$reg = Invoke-RestMethod -Method Post "$URL/api/v1/auth/register" -ContentType "application/json" `
+  -Body (@{ businessName = "Acme Stores"; name = "Ada"; email = "ada@acme.com"; password = "Password123" } | ConvertTo-Json)
+
+# 2. Create an API key
+$key = Invoke-RestMethod -Method Post "$URL/api/v1/api-keys" -Headers @{ Authorization = "Bearer $($reg.token)" } `
+  -ContentType "application/json" -Body '{"name":"Production server"}'
+$api = @{ "X-API-Key" = $key.apiKey.apiKey; "X-API-Secret" = $key.apiKey.apiSecret }
+
+# 3. Send a notification
+$n = Invoke-RestMethod -Method Post "$URL/api/v1/notifications" -Headers ($api + @{ "Idempotency-Key" = "order-1001-shipped" }) `
+  -ContentType "application/json" `
+  -Body (@{ channel = "EMAIL"; recipient = @{ id = "user_123"; email = "customer@example.com" }; subject = "Your order has shipped"; message = "Order #1001 is on its way." } | ConvertTo-Json)
+
+# Check the status a few seconds later
+Start-Sleep 3
+(Invoke-RestMethod "$URL/api/v1/notifications/$($n.notification.id)" -Headers $api).notification |
+  Select-Object channel, status, provider, to
 ```
 
 Node.js example:
@@ -227,10 +273,17 @@ see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#4-turn-on-real-delivery-optional).
 
 ## Testing
 
+These commands work the same in bash and PowerShell:
+
 ```bash
+npm install
 docker run -d -p 27017:27017 --name mongo-test mongo:7
 npm test
+docker rm -f mongo-test     # when you're done
 ```
+
+If port 27017 is already in use (for example by a local MongoDB), stop that first or point the
+tests elsewhere with `TEST_DB_URL`.
 
 55 integration tests run against a real MongoDB (override with `TEST_DB_URL`), covering auth,
 API keys, sending on every channel, retries and failures, scheduling, crash recovery,
