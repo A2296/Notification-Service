@@ -1,166 +1,99 @@
-const mongoose = require("mongoose");
 const notificationService = require("../services/notificationService");
+const { z } = require("zod");
 
-const isOptionalString = (value) =>
-  value === undefined || typeof value === "string";
+const idempotencyKeySchema = z.string().trim().min(1).max(255);
 
-const createNotification = async (req, res, next) => {
-  try {
-    const { recipient, channel, subject, message } = req.body || {};
+const createNotification = async (req, res) => {
+  const header = req.get("idempotency-key");
+  const idempotencyKey =
+    header === undefined ? undefined : idempotencyKeySchema.safeParse(header).data;
 
-    if (!recipient || !channel || !message) {
-      return res.status(400).json({
-        success: false,
-        message: "Recipient, channel and message are required",
-      });
-    }
-
-    if (
-      typeof recipient !== "string" ||
-      typeof channel !== "string" ||
-      typeof message !== "string" ||
-      !isOptionalString(subject)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Recipient, channel, subject and message must be strings",
-      });
-    }
-
-    const normalizedChannel = channel.toUpperCase();
-
-    const allowedChannels = ["EMAIL", "SMS", "IN_APP"];
-
-    if (!allowedChannels.includes(normalizedChannel)) {
-      return res.status(400).json({
-        success: false,
-        message: "Channel must be EMAIL, SMS, or IN_APP",
-      });
-    }
-
-    const notification = await notificationService.createNotification({
-      userId: req.user.id,
-      recipient,
-      channel: normalizedChannel,
-      subject,
-      message,
+  if (header !== undefined && !idempotencyKey) {
+    return res.status(400).json({
+      success: false,
+      message: "Idempotency-Key must be 1-255 characters",
     });
-
-    res.status(201).json({
-      success: true,
-      message: "Notification created successfully",
-      notification,
-    });
-  } catch (error) {
-    next(error);
   }
+
+  const { notification, created } = await notificationService.createNotification({
+    businessId: req.business._id,
+    input: req.validated.body,
+    idempotencyKey,
+  });
+
+  // 202: accepted for delivery; poll GET /notifications/:id for the final status
+  res.status(created ? 202 : 200).json({
+    success: true,
+    message: created
+      ? "Notification accepted for delivery"
+      : "Duplicate request: returning the original notification",
+    notification,
+  });
 };
 
-const getUserNotifications = async (req, res, next) => {
-  try {
-    const {
-      search,
-      channel,
-      status,
-      page,
-      limit,
-    } = req.query;
+const listNotifications = async (req, res) => {
+  const result = await notificationService.listNotifications(
+    { business: req.business._id },
+    req.validated.query
+  );
 
-    // Repeated query params (?status=a&status=b) arrive as arrays
-    if (![search, channel, status, page, limit].every(isOptionalString)) {
-      return res.status(400).json({
-        success: false,
-        message: "Query parameters must not be repeated",
-      });
-    }
-
-    const allowedStatuses = ["PENDING", "SENT", "FAILED"];
-
-    if (status && !allowedStatuses.includes(status.toUpperCase())) {
-      return res.status(400).json({
-        success: false,
-        message: "Status must be PENDING, SENT, or FAILED",
-      });
-    }
-
-    if (page && (Number.isNaN(Number(page)) || Number(page) < 1)) {
-      return res.status(400).json({
-        success: false,
-        message: "Page must be a positive number",
-      });
-    }
-
-    if (limit && (Number.isNaN(Number(limit)) || Number(limit) < 1)) {
-      return res.status(400).json({
-        success: false,
-        message: "Limit must be a positive number",
-      });
-    }
-
-    const result = await notificationService.getUserNotifications(
-      req.user.id,
-      search,
-      channel,
-      status,
-      page,
-      limit,
-    );
-
-    res.status(200).json({
-      success: true,
-      ...result,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.status(200).json({
+    success: true,
+    ...result,
+  });
 };
 
-const getNotificationById = async (req, res, next) => {
-  try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(404).json({
-        success: false,
-        message: "Notification not found",
-      });
-    }
+const getNotificationById = async (req, res) => {
+  const notification = await notificationService.getNotification(
+    req.business._id,
+    req.validated.params.id
+  );
 
-    const notification = await notificationService.getNotificationById(
-      req.params.id,
-      req.user.id,
-    );
-
-    if (!notification) {
-      return res.status(404).json({
-        success: false,
-        message: "Notification not found",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      notification,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.status(200).json({
+    success: true,
+    notification,
+  });
 };
 
-const getAllNotifications = async (req, res, next) => {
-  try {
-    const notifications = await notificationService.getAllNotifications();
+const markAsRead = async (req, res) => {
+  const notification = await notificationService.markAsRead(
+    req.business._id,
+    req.validated.params.id
+  );
 
-    res.status(200).json({
-      success: true,
-      notifications,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.status(200).json({
+    success: true,
+    notification,
+  });
+};
+
+const retryNotification = async (req, res) => {
+  const notification = await notificationService.retryNotification(
+    req.business._id,
+    req.validated.params.id
+  );
+
+  res.status(202).json({
+    success: true,
+    message: "Notification queued for retry",
+    notification,
+  });
+};
+
+const getStats = async (req, res) => {
+  const stats = await notificationService.getStats({ business: req.business._id });
+
+  res.status(200).json({
+    success: true,
+    stats,
+  });
 };
 
 module.exports = {
   createNotification,
-  getUserNotifications,
+  listNotifications,
   getNotificationById,
-  getAllNotifications,
+  markAsRead,
+  retryNotification,
+  getStats,
 };

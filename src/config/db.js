@@ -1,8 +1,7 @@
 const mongoose = require("mongoose");
 
-// Strip query operators like {"$ne": null} from user-supplied filter values
-// to prevent NoSQL injection (e.g. in login)
-mongoose.set("sanitizeFilter", true);
+// NoSQL injection is prevented by validating every request with zod
+// (src/middleware/validate.js), so user input can only ever be plain strings/numbers.
 
 const connectDB = async () => {
   try {

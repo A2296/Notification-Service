@@ -15,6 +15,14 @@ const errorMiddleware = (err, req, res, next) => {
     });
   }
 
+  // Unique index violation
+  if (err.code === 11000) {
+    return res.status(409).json({
+      success: false,
+      message: "Resource already exists",
+    });
+  }
+
   const status = err.status || err.statusCode || 500;
 
   if (status >= 500) {
