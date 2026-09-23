@@ -1,0 +1,32 @@
+# One-command local stack: API + MongoDB
+#   docker compose up --build
+#   docker compose exec api npm run seed:admin   (uses ADMIN_EMAIL/ADMIN_PASSWORD below)
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      PORT: 5000
+      DB_CONNECTION_STRING: mongodb://mongo:27017/notification_service
+      JWT_SECRET: ${JWT_SECRET:-local-dev-secret-change-me}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeMe123}
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo-data:
