@@ -1,0 +1,45 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Render dashboard -> New -> Blueprint -> select this repo. See docs/DEPLOYMENT.md.
+services:
+  - type: web
+    name: notification-service
+    runtime: docker
+    plan: free
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      # MongoDB Atlas connection string (free M0 cluster works)
+      - key: DB_CONNECTION_STRING
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      # e.g. https://notification-service.onrender.com (needed for Twilio delivery callbacks)
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: TRUST_PROXY
+        value: "1"
+      - key: EMAIL_PROVIDER
+        value: console
+      - key: EMAIL_FROM
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMS_PROVIDER
+        value: console
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
