@@ -12,7 +12,6 @@ info:
     2. `POST /api/v1/api-keys` with that token to get an **API key + secret** (the secret is shown once).
     3. Call the integration endpoints from your **backend** with the headers
        `X-API-Key` and `X-API-Secret`. Never put the secret in browser or mobile code.
-=======
        Already registered (409)? Use `POST /api/v1/auth/login` to get a token instead.
     2. Click **Authorize**, paste the token under **BearerAuth**, then
        `POST /api/v1/api-keys` to get an **API key + secret** (the secret is shown once).
