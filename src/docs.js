@@ -14,10 +14,12 @@ router.get("/openapi.json", (req, res) => res.json(spec));
 
 router.use("/docs", swaggerUi.serve, swaggerUi.setup(spec, {
   customSiteTitle: "Notification Service API",
+ feature/business-platform
   swaggerOptions: {
     // Keep the token / API key entered under "Authorize" across page refreshes
     persistAuthorization: true,
   },
+ main
 }));
 
 module.exports = router;
