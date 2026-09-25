@@ -32,6 +32,31 @@ Built with Node.js, Express 5, MongoDB (Mongoose), Nodemailer and Twilio.
 
 ---
 
+## Frontend Features
+
+- Business registration and sign-in interface
+- Dashboard overview of sent, delivered, pending, and failed notifications
+- Notification composer for email, SMS, and in-app channels
+- Delivery-activity table with search and status filters
+- API credential screen with a copyable API request example
+- Configurable backend API URL and bearer-token connection
+- Demo mode for reviewing the interface without a running backend
+- Responsive layout for desktop and mobile devices
+- Accessible form labels and semantic status output
+
+---
+
+## Frontend Technology
+
+| Area | Technology |
+| --- | --- |
+| Structure | HTML5 |
+| Styling | CSS3 |
+| Interactivity and API requests | Vanilla JavaScript (ES6+) |
+| Backend integration | REST API using `fetch` |
+
+---
+
 ## How it works
 
 ```text
@@ -315,6 +340,13 @@ Docker build on every pull request.
 ├── docs/                       openapi.yaml, DEPLOYMENT.md
 ├── test/                       Integration tests (node:test + supertest)
 ├── Dockerfile, docker-compose.yml, render.yaml
+|
+├── frontend/
+|    ├── index.html      # Dashboard markup, navigation, forms, dialogs, and tables
+|    ├── app.js          # UI behavior, API client, authentication, and notification actions
+|    ├── styles.css      # Main dashboard layout, responsive design, and component styles
+|    ├── auth.css        # Authentication-specific styles
+|    └── README.md       # Frontend documentation and setup instructions
 └── .github/workflows/ci.yml
 ```
 
@@ -344,3 +376,5 @@ Backend capstone project. Contributors (from the Git history; update each role a
 | 3gerrr | DevOps and integration: testing, Docker, CI/CD, deployment, multi-tenant platform, delivery worker |
 | Valentine_M | Repository setup |
 | Adeshinayomi | Repository configuration |
+| Macfrancis C. Nwaigwe | dashtech0147 | Frontend Developer | Designed and implemented the Notification Service dashboard, including business registration/sign-in, API connection settings, API credential management, notification composer, delivery activity tracking, and responsive user interface styling. |
+
