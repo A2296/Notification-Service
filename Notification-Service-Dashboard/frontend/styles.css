@@ -525,7 +525,7 @@ dialog {
   border-radius:14px;
   box-shadow:0 24px 70px rgba(0,0,0,.3);
   padding:0;
-  width:min(440px,calc(100vw - 34px)
+  width:min(440px,calc(100vw - 34px));
 }
 dialog::backdrop {
   background:rgba(8,28,39,.45)
