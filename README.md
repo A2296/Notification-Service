@@ -376,5 +376,5 @@ Backend capstone project. Contributors (from the Git history; update each role a
 | 3gerrr | DevOps and integration: testing, Docker, CI/CD, deployment, multi-tenant platform, delivery worker |
 | Valentine_M | Repository setup |
 | Adeshinayomi | Repository configuration |
-| Macfrancis C. Nwaigwe dashtech0147 | Frontend Developer. Designed and implemented the Notification Service dashboard, including business registration/sign-in, API connection settings, API credential management, notification composer, delivery activity tracking, and responsive user interface styling. |
+| Macfrancis C. Nwaigwe dashtech0147 | Frontend Developer: Designed and implemented the Notification Service dashboard, including business registration/sign-in, API connection settings, API credential management, notification composer, delivery activity tracking, and responsive user interface styling. |
 
