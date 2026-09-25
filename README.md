@@ -56,8 +56,6 @@ The API responds immediately and delivery happens in the background, so a slow p
 blocks the calling business. The queue lives in MongoDB, so pending notifications survive
 restarts and no extra infrastructure (Redis, RabbitMQ) is needed.
 
---feature/business-platform
-
 ## Quick start
 
 ### Option A: Docker (recommended)
