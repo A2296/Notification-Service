@@ -113,7 +113,7 @@ Register a business:
 
 | Team Member | GitHub | Role | Contribution |
 | --- | --- | --- | --- |
-| Macfrancis C. Nwaigwe | dashtech0147 | [@A2296](https://github.com/A2296) | Frontend Developer | Designed and implemented the Notification Service dashboard, including business registration/sign-in, API connection settings, API credential management, notification composer, delivery activity tracking, and responsive user interface styling. |
+| Macfrancis C. Nwaigwe | dashtech-c | [@A2296](https://github.com/A2296) | Frontend Developer | Designed and implemented the Notification Service dashboard, including business registration/sign-in, API connection settings, API credential management, notification composer, delivery activity tracking, and responsive user interface styling. |
 
 ## License
 
