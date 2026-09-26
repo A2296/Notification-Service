@@ -4,7 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Notification Service dashboard" />
+    <meta name="referrer" content="no-referrer" />
     <title>NotifyFlow | Notification Service</title>
+    <link rel="icon" href="data:," />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -24,19 +26,19 @@
           <a class="nav-link" href="#credentials" data-view="credentials"><span>⌘</span> API credentials</a>
         </nav>
         <div class="sidebar-footer">
-          <button class="nav-link button-link" id="settingsButton"><span>⚙</span> Connection settings</button>
+          <a class="nav-link" href="/docs" target="_blank" rel="noopener noreferrer"><span>⚙</span> API documentation</a>
           <p>Notification infrastructure<br />for product teams.</p>
         </div>
       </aside>
 
       <main class="main-content">
         <header class="topbar">
-          <button class="mobile-menu" id="menuButton" aria-label="Open menu">☰</button>
+          <button class="mobile-menu" id="menuButton" type="button" aria-label="Open menu">☰</button>
           <div>
             <p class="eyebrow">WORKSPACE</p>
-            <h1 id="pageTitle">Good morning, Acme</h1>
+            <h1 id="pageTitle">Welcome</h1>
           </div>
-          <div class="topbar-actions"><button class="account-button" id="accountButton">Sign in</button><div class="connection-pill" id="connectionStatus"><span></span> Demo mode</div></div>
+          <div class="topbar-actions"><button class="account-button" id="accountButton" type="button">Sign in</button><div class="connection-pill" id="connectionStatus"><span></span> Connecting…</div></div>
         </header>
 
         <section class="view active-view" id="dashboard">
@@ -46,24 +48,24 @@
               <h2>Everything your customers need, delivered.</h2>
               <p>Send email, SMS and in-app messages from one dependable API.</p>
             </div>
-            <button class="primary-button" data-go-to="send">Create notification <span>→</span></button>
+            <button class="primary-button" type="button" data-go-to="send">Create notification <span>→</span></button>
           </div>
 
           <section class="stats-grid" aria-label="Delivery summary">
-            <article class="stat-card"><p>Sent today</p><strong id="sentToday">1,284</strong><small class="positive">↑ 12.4% from yesterday</small></article>
-            <article class="stat-card"><p>Delivered</p><strong id="deliveredCount">1,201</strong><small class="positive">93.5% delivery rate</small></article>
-            <article class="stat-card"><p>In progress</p><strong id="pendingCount">61</strong><small>Awaiting provider response</small></article>
-            <article class="stat-card"><p>Failed</p><strong id="failedCount">22</strong><small class="warning">Needs attention</small></article>
+            <article class="stat-card"><p>Total notifications</p><strong id="totalCount">—</strong><small>All channels</small></article>
+            <article class="stat-card"><p>Sent or delivered</p><strong id="deliveredCount">—</strong><small class="positive" id="deliveryRate">Accepted by providers</small></article>
+            <article class="stat-card"><p>In progress</p><strong id="pendingCount">—</strong><small>Queued or with the provider</small></article>
+            <article class="stat-card"><p>Failed</p><strong id="failedCount">—</strong><small class="warning">Needs attention</small></article>
           </section>
 
           <section class="content-card activity-preview">
-            <div class="section-heading"><div><p class="eyebrow">LIVE FEED</p><h2>Recent delivery activity</h2></div><button class="text-button" data-go-to="activity">View all →</button></div>
-            <div class="table-wrap"><table><thead><tr><th>Notification</th><th>Channel</th><th>Recipient</th><th>Status</th><th>Time</th></tr></thead><tbody id="recentActivity"></tbody></table></div>
+            <div class="section-heading"><div><p class="eyebrow">LIVE FEED</p><h2>Recent delivery activity</h2></div><button class="text-button" type="button" data-go-to="activity">View all →</button></div>
+            <div class="table-wrap"><table><thead><tr><th>Notification</th><th>Channel</th><th>Recipient</th><th>Status</th><th>Time</th></tr></thead><tbody id="recentActivity"></tbody></table><p class="empty-state hidden" id="emptyRecent">No notifications yet.</p></div>
           </section>
         </section>
 
         <section class="view" id="send">
-          <div class="section-heading"><div><p class="eyebrow">COMPOSER</p><h2>Send a notification</h2><p class="subtle">Messages are sent using the selected channel and recorded in activity.</p></div></div>
+          <div class="section-heading"><div><p class="eyebrow">COMPOSER</p><h2>Send a notification</h2><p class="subtle">Messages are queued for delivery on the selected channel and recorded in activity.</p></div></div>
           <form class="content-card send-form" id="notificationForm">
             <div class="channel-picker" aria-label="Select a notification channel">
               <label><input type="radio" name="channel" value="email" checked /><span>✉<b>Email</b></span></label>
@@ -71,54 +73,58 @@
               <label><input type="radio" name="channel" value="in-app" /><span>▣<b>In-app</b></span></label>
             </div>
             <div class="form-grid">
-              <label>Recipient <input name="recipient" type="text" required placeholder="name@example.com or +1 555 000 0000" /></label>
-              <label>Reference ID <input name="referenceId" type="text" placeholder="Optional order or user ID" /></label>
-              <label class="full-width subject-field">Subject <input name="subject" type="text" required placeholder="Your notification subject" /></label>
-              <label class="full-width">Message <textarea name="message" required rows="7" placeholder="Write your message…"></textarea><small>Keep SMS messages brief. Carrier fees may apply.</small></label>
+              <label><span id="recipientLabel">Recipient email</span> <input id="recipientInput" name="recipient" type="email" required maxlength="254" autocomplete="off" placeholder="name@example.com" /></label>
+              <label>Reference ID <input name="referenceId" type="text" maxlength="100" placeholder="Optional order or user ID" /></label>
+              <label class="full-width subject-field"><span>Subject <small id="subjectHint">(required for email)</small></span> <input id="subjectInput" name="subject" type="text" required maxlength="200" placeholder="Your notification subject" /></label>
+              <label class="full-width">Message <textarea id="messageInput" name="message" required rows="7" maxlength="5000" placeholder="Write your message…"></textarea><small id="messageHint">Up to 5,000 characters.</small></label>
             </div>
-            <div class="form-actions"><output id="formMessage"></output><button class="primary-button" type="submit">Send notification <span>→</span></button></div>
+            <div class="form-actions"><output id="formMessage"></output><button class="primary-button" id="sendButton" type="submit">Send notification <span>→</span></button></div>
           </form>
         </section>
 
         <section class="view" id="activity">
-          <div class="section-heading"><div><p class="eyebrow">DELIVERY LOG</p><h2>Notification activity</h2><p class="subtle">Search status and delivery history across every channel.</p></div><button class="secondary-button" id="refreshActivity">Refresh</button></div>
-          <div class="content-card filter-bar"><label class="sr-only" for="activitySearch">Search notification activity</label><input id="activitySearch" type="search" placeholder="Search recipient, subject, or ID" /><label class="sr-only" for="statusFilter">Filter by delivery status</label><select id="statusFilter"><option value="all">All statuses</option><option value="sent">Sent</option><option value="delivered">Delivered</option><option value="pending">Pending</option><option value="failed">Failed</option></select></div>
+          <div class="section-heading"><div><p class="eyebrow">DELIVERY LOG</p><h2>Notification activity</h2><p class="subtle">Search status and delivery history across every channel.</p></div><button class="secondary-button" id="refreshActivity" type="button">Refresh</button></div>
+          <div class="content-card filter-bar"><label class="sr-only" for="activitySearch">Search notification activity</label><input id="activitySearch" type="search" maxlength="100" placeholder="Search recipient, subject or message" /><label class="sr-only" for="statusFilter">Filter by delivery status</label><select id="statusFilter"><option value="all">All statuses</option><option value="pending">Pending</option><option value="processing">Processing</option><option value="sent">Sent</option><option value="delivered">Delivered</option><option value="failed">Failed</option></select></div>
           <div class="content-card table-wrap"><table><thead><tr><th>Notification</th><th>Channel</th><th>Recipient</th><th>Status</th><th>Created</th></tr></thead><tbody id="activityRows"></tbody></table><p class="empty-state hidden" id="emptyActivity">No matching notifications found.</p></div>
         </section>
 
         <section class="view" id="credentials">
           <div class="section-heading"><div><p class="eyebrow">DEVELOPER SETTINGS</p><h2>API credentials</h2><p class="subtle">Use these credentials only on your server. Never place a secret in browser or mobile application code.</p></div></div>
           <div class="credentials-layout">
-            <section class="content-card key-card"><p class="eyebrow">ACTIVE API KEY</p><div class="key-value"><code id="apiKeyDisplay">nf_demo_••••••••••••••••2c8f</code><button class="icon-button" id="copyKey" aria-label="Copy API key">⧉</button></div><p class="subtle">Created Sep 24, 2026 · Last used: never</p><div class="key-actions"><button class="secondary-button" id="generateKey">Generate test key</button><button class="danger-button" id="revokeKey">Revoke key</button></div></section>
-            <section class="content-card code-card"><div class="section-heading compact"><div><p class="eyebrow">QUICK START</p><h3>Send with the API</h3></div><button class="icon-button" id="copySnippet" aria-label="Copy code sample">⧉</button></div><pre><code id="codeSnippet">curl -X POST "$API_URL/api/notifications" \
-  -H "x-api-key: $NOTIFYFLOW_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"channel":"email","recipient":"user@example.com","subject":"Welcome","message":"Thanks for joining us!"}'</code></pre></section>
+            <section class="content-card key-card">
+              <p class="eyebrow">ACTIVE API KEY</p>
+              <div class="key-value"><code id="apiKeyDisplay">No active key</code><button class="icon-button" id="copyKey" type="button" aria-label="Copy API key">⧉</button></div>
+              <p class="subtle" id="apiKeyMeta">Sign in to manage your API keys.</p>
+              <div class="secret-box hidden" id="secretBox" role="status">
+                <p class="eyebrow">API SECRET · SHOWN ONCE</p>
+                <div class="key-value"><code id="apiSecretDisplay"></code><button class="icon-button" id="copySecret" type="button" aria-label="Copy API secret">⧉</button></div>
+                <p class="subtle">Store this secret in your server's environment now. Only a hash is kept, so it cannot be shown again.</p>
+              </div>
+              <label class="key-name">Key name <input id="keyName" type="text" maxlength="100" placeholder="e.g. Production server" /></label>
+              <div class="key-actions"><button class="secondary-button" id="generateKey" type="button">Generate API key</button><button class="danger-button" id="revokeKey" type="button">Revoke key</button></div>
+            </section>
+            <section class="content-card code-card"><div class="section-heading compact"><div><p class="eyebrow">QUICK START</p><h3>Send with the API</h3></div><button class="icon-button" id="copySnippet" type="button" aria-label="Copy code sample">⧉</button></div><pre><code id="codeSnippet"></code></pre></section>
           </div>
+          <section class="content-card table-wrap key-list">
+            <div class="section-heading compact"><div><p class="eyebrow">ALL KEYS</p><h3>Key history</h3></div></div>
+            <table><thead><tr><th>Name</th><th>Key ID</th><th>Created</th><th>Last used</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="apiKeyRows"></tbody></table>
+            <p class="empty-state hidden" id="emptyKeys">No API keys yet. Generate one to start integrating.</p>
+          </section>
         </section>
       </main>
     </div>
 
-    <dialog id="settingsDialog">
-      <form method="dialog" id="settingsForm">
-        <button class="dialog-close" value="cancel" aria-label="Close">×</button>
-        <p class="eyebrow">CONNECTION</p><h2>Backend connection</h2>
-        <p class="subtle">Leave empty to use the interactive demo. Enter the URL where the Express API is deployed, for example <code>http://localhost:5000</code>.</p>
-        <label>API base URL<input id="apiBaseUrl" type="url" placeholder="https://api.your-domain.com" /></label>
-        <label>Bearer token <input id="accessToken" type="password" placeholder="Optional access token" autocomplete="off" /></label>
-        <div class="dialog-actions"><button class="secondary-button" value="cancel">Cancel</button><button class="primary-button" value="default" id="saveSettings">Save connection</button></div>
-      </form>
-    </dialog>
     <dialog id="authDialog">
       <form method="dialog" id="authForm">
-        <button class="dialog-close" value="cancel" aria-label="Close">×</button>
+        <button class="dialog-close" type="button" aria-label="Close">×</button>
         <p class="eyebrow">BUSINESS PORTAL</p><h2 id="authTitle">Sign in to your workspace</h2>
         <p class="subtle" id="authDescription">Use your business account to securely manage notifications and API credentials.</p>
-        <label>Work email<input id="authEmail" type="email" required placeholder="you@company.com" /></label>
-        <label>Password<input id="authPassword" type="password" required placeholder="Enter your password" /></label>
-        <label class="register-only hidden">Business name<input id="businessName" type="text" placeholder="Acme Inc." /></label>
+        <label class="register-only hidden">Business name<input id="businessName" type="text" maxlength="100" autocomplete="organization" placeholder="Acme Inc." /></label>
+        <label class="register-only hidden">Your name<input id="authName" type="text" maxlength="100" autocomplete="name" placeholder="Ada Lovelace" /></label>
+        <label>Work email<input id="authEmail" type="email" required maxlength="254" autocomplete="email" placeholder="you@company.com" /></label>
+        <label>Password<input id="authPassword" type="password" required maxlength="128" autocomplete="current-password" placeholder="Enter your password" /></label>
         <output class="form-error" id="authMessage"></output>
-        <div class="dialog-actions auth-actions"><button class="text-button" type="button" id="toggleAuth">Create an account</button><button class="primary-button" value="default" id="authSubmit">Sign in <span>→</span></button></div>
+        <div class="dialog-actions auth-actions"><button class="text-button" type="button" id="toggleAuth">Create an account</button><button class="primary-button" type="submit" value="default" id="authSubmit">Sign in <span>→</span></button></div>
       </form>
     </dialog>
     <output class="toast" id="toast"></output>

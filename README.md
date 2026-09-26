@@ -18,7 +18,7 @@ Built with Node.js, Express 5, MongoDB (Mongoose), Nodemailer and Twilio.
 | Area | What's included |
 |---|---|
 | Multi-tenancy | Business accounts; every record is scoped to its business and isolation is tested |
-| Authentication | API key + secret for integrations (secret hashed, shown once, revocable); JWT for the dashboard |
+| Authentication | API key + secret for integrations (secret hashed, shown once, revocable, up to 10 active per business); dashboard sessions in an HttpOnly cookie (JWT bearer for scripts and Swagger) with server-side logout |
 | Authorization | Business users vs. platform `ADMIN`; suspending a business blocks its keys and logins at once |
 | Channels | `EMAIL` (any SMTP provider), `SMS` (Twilio), `IN_APP` (per-recipient inbox with read tracking) |
 | Delivery | Background worker, automatic retries with exponential backoff, permanent-failure detection, crash recovery, scheduled sends |
@@ -26,23 +26,31 @@ Built with Node.js, Express 5, MongoDB (Mongoose), Nodemailer and Twilio.
 | Reliability | `Idempotency-Key` header prevents duplicate sends; manual retry of failed notifications |
 | Recipients | Store your users' contact details once, then send by your own user ID |
 | Validation | Every request is validated with zod and returns field-level error messages |
-| Security | Helmet headers, per-IP login rate limit, per-business API rate limit, NoSQL/regex injection protection, bcrypt passwords |
+| Security | Helmet headers and a strict CSP for the dashboard, CSRF protection, per-IP login rate limit, per-business API rate limit, NoSQL/regex injection protection, bcrypt passwords, audit log |
+| Dashboard | Business web dashboard served by the API at `/` (see below) |
 | Operations | Docker, docker-compose (with a local email inbox), `/health`, graceful shutdown, GitHub Actions CI, Render blueprint |
-| Docs & tests | OpenAPI 3 spec + Swagger UI; 55 integration tests |
+| Docs & tests | OpenAPI 3 spec + Swagger UI; 64 integration tests |
 
 ---
 
 ## Frontend Features
 
-- Business registration and sign-in interface
-- Dashboard overview of sent, delivered, pending, and failed notifications
-- Notification composer for email, SMS, and in-app channels
-- Delivery-activity table with search and status filters
-- API credential screen with a copyable API request example
-- Configurable backend API URL and bearer-token connection
-- Demo mode for reviewing the interface without a running backend
+The dashboard in [`Notification-Service-Dashboard/frontend`](Notification-Service-Dashboard/frontend)
+is served by the API itself, so it is available at `http://localhost:5000/` (or your deployed URL)
+with no separate hosting or configuration.
+
+- Business registration and sign-in; sign-out ends the session on the server
+- Overview of total, sent/delivered, in-progress and failed notifications
+- Notification composer for email, SMS and in-app channels (with duplicate-send protection)
+- Delivery-activity table with server-side search and status filters
+- API key management: generate (secret shown once), list, revoke, plus a ready-to-run `curl` sample
+- Demo mode with sample data when the page is opened without the API (e.g. from a static server)
 - Responsive layout for desktop and mobile devices
 - Accessible form labels and semantic status output
+
+Security: the session token is in an HttpOnly, `SameSite=Strict` cookie that JavaScript cannot read,
+nothing sensitive is kept in browser storage, every request is same-origin with a 15-second timeout,
+and the page runs under a Content-Security-Policy with no inline scripts or styles.
 
 ---
 
@@ -94,6 +102,7 @@ docker compose exec api npm run seed:admin   # platform admin: admin@example.com
 
 | URL | What |
 |---|---|
+| http://localhost:5000/ | Business dashboard: register, send notifications, manage API keys |
 | http://localhost:5000/docs | API documentation (try requests in the browser) |
 | http://localhost:5000/health | Health check |
 | http://localhost:8025 | **Mailpit**: every email the service sends appears here |
@@ -251,8 +260,9 @@ Full request/response details are in **`/docs`**.
 | Method & path | Auth | Purpose |
 |---|---|---|
 | `POST /api/v1/auth/register` | none | Register a business + first user |
-| `POST /api/v1/auth/login` | none | Dashboard login (JWT) |
+| `POST /api/v1/auth/login` | none | Dashboard login: sets the session cookie and returns a JWT |
 | `GET /api/v1/auth/me` | JWT | Current user and business |
+| `POST /api/v1/auth/logout` | JWT | End every session of the user (all their tokens stop working) |
 | `POST/GET /api/v1/api-keys`, `DELETE /api/v1/api-keys/:id` | JWT | Create, list, revoke API keys |
 | `POST /api/v1/notifications` | API key or JWT | Send a notification |
 | `GET /api/v1/notifications` | API key or JWT | List with `search`, `channel`, `status`, `recipientId`, `from`, `to`, `page`, `limit` |
@@ -271,6 +281,10 @@ Full request/response details are in **`/docs`**.
 All responses use `{ "success": true|false, ... }`. Validation errors include an `errors` array
 of `{ field, message }`.
 
+"JWT" means either the `ns_session` cookie (set by login, used by the dashboard) or an
+`Authorization: Bearer <token>` header. Requests that change data using the cookie must also send
+`X-Requested-With: XMLHttpRequest`, which other websites cannot add (CSRF protection).
+
 ---
 
 ## Configuration
@@ -286,6 +300,15 @@ see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#4-turn-on-real-delivery-optional).
 
 - API secrets are 256-bit random values stored only as SHA-256 hashes and compared in constant time.
 - Passwords are hashed with bcrypt; login returns the same error for unknown email and wrong password.
+- Dashboard sessions use an HttpOnly, `SameSite=Strict` cookie (`Secure` in production), so scripts
+  cannot read the token; cookie-authenticated changes also require the `X-Requested-With` header.
+- JWTs are only accepted with HS256 and the expected issuer and audience. Logout increments a
+  per-user token version, so every previously issued token stops working immediately.
+- A business can hold at most 10 active API keys (`MAX_ACTIVE_API_KEYS`).
+- The dashboard is same-origin and runs under a strict Content-Security-Policy (no inline scripts
+  or styles, no framing); it renders all API data as text, never as HTML.
+- Logins, registrations, logouts, API key creation/revocation and business suspensions are written
+  as JSON audit lines (`"type":"audit"`) without passwords, tokens or secrets.
 - Every query is scoped to the caller's business; cross-tenant access is covered by tests.
 - Suspended businesses are blocked on the next request (keys and tokens are checked against the database).
 - Request bodies and queries are validated and typed, which blocks NoSQL operator injection; search input is regex-escaped.
@@ -310,8 +333,8 @@ docker rm -f mongo-test     # when you're done
 If port 27017 is already in use (for example by a local MongoDB), stop that first or point the
 tests elsewhere with `TEST_DB_URL`.
 
-55 integration tests run against a real MongoDB (override with `TEST_DB_URL`), covering auth,
-API keys, sending on every channel, retries and failures, scheduling, crash recovery,
+64 integration tests run against a real MongoDB (override with `TEST_DB_URL`), covering auth,
+sessions and logout, JWT tampering, the dashboard CSP, API keys, sending on every channel, retries and failures, scheduling, crash recovery,
 idempotency, tenant isolation, admin controls and webhook signatures. Providers are swapped
 for fakes, so no email or SMS is sent. GitHub Actions runs the tests, `npm audit` and a
 Docker build on every pull request.
@@ -335,18 +358,16 @@ Docker build on every pull request.
 │   │   ├── notificationService.js   Create, list, inbox, retry, stats
 │   │   ├── deliveryWorker.js        Queue processing, retries, backoff
 │   │   └── providers/               console, smtp, twilio, in-app
-│   └── utils/                  API key generation, HttpError
+│   └── utils/                  API key generation, session cookie, audit log, HttpError
 ├── scripts/createAdmin.js      Create a platform admin
 ├── docs/                       openapi.yaml, DEPLOYMENT.md
 ├── test/                       Integration tests (node:test + supertest)
 ├── Dockerfile, docker-compose.yml, render.yaml
-|
-├── frontend/
-|    ├── index.html      # Dashboard markup, navigation, forms, dialogs, and tables
-|    ├── app.js          # UI behavior, API client, authentication, and notification actions
-|    ├── styles.css      # Main dashboard layout, responsive design, and component styles
-|    ├── auth.css        # Authentication-specific styles
-|    └── README.md       # Frontend documentation and setup instructions
+├── Notification-Service-Dashboard/frontend/   Business dashboard, served by the API at /
+│   ├── index.html              Markup, navigation, forms, dialogs and tables
+│   ├── app.js                  UI behavior and same-origin API client
+│   ├── styles.css, auth.css    Layout, responsive design and component styles
+│   └── README.md               Frontend documentation
 └── .github/workflows/ci.yml
 ```
 
@@ -360,7 +381,7 @@ controllers throw `HttpError(status, message)` instead of using try/catch.
 - Outbound webhooks so businesses are notified of status changes instead of polling
 - Message templates with variables (`Hello {{name}}`)
 - Per-business provider credentials and sender domains
-- Web dashboard UI for businesses
+- Per-key scopes (for example send-only keys) and daily sending quotas per business
 - Bulk sends and user notification preferences / opt-out
 - Email open/bounce tracking via provider webhooks
 

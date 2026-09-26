@@ -96,6 +96,25 @@ test("a revoked key stops working immediately", async () => {
   assert.equal(again.status, 404);
 });
 
+test("a business cannot hold more than 10 active keys", async () => {
+  const business = await createBusiness(); // already has one key
+  const create = () =>
+    request(app).post("/api/v1/api-keys").set(business.jwtHeaders).send({ name: "Extra" });
+
+  for (let count = 2; count <= 10; count += 1) {
+    assert.equal((await create()).status, 201);
+  }
+
+  const blocked = await create();
+  assert.equal(blocked.status, 409);
+
+  // Revoking a key frees a slot
+  await request(app)
+    .delete(`/api/v1/api-keys/${business.apiKeyId}`)
+    .set(business.jwtHeaders);
+  assert.equal((await create()).status, 201);
+});
+
 test("a business cannot revoke another business's key", async () => {
   const owner = await createBusiness("Owner Co");
   const attacker = await createBusiness("Attacker Co");
