@@ -53,6 +53,17 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: |
+        Token from register/login. HS256, 1 day by default. Stops working after
+        `POST /api/v1/auth/logout`.
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: ns_session
+      description: |
+        HttpOnly, SameSite=Strict cookie set by register/login and used by the dashboard.
+        Requests that change data with this cookie must also send
+        `X-Requested-With: XMLHttpRequest` (CSRF protection).
 
   parameters:
     Page:
@@ -300,6 +311,7 @@ paths:
     post:
       tags: [Auth]
       summary: Register a business and its first dashboard user
+      description: Returns a JWT and also sets it as the HttpOnly `ns_session` cookie.
       security: []
       requestBody:
         required: true
@@ -327,6 +339,7 @@ paths:
     post:
       tags: [Auth]
       summary: Log in to the dashboard
+      description: Returns a JWT and also sets it as the HttpOnly `ns_session` cookie.
       security: []
       requestBody:
         required: true
@@ -358,6 +371,21 @@ paths:
         "200": { description: Current user }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Log out everywhere
+      description: |
+        Clears the session cookie and invalidates **every** token issued to this user,
+        on all devices. Sign in again to get a new one.
+      security:
+        - BearerAuth: []
+        - SessionCookie: []
+      responses:
+        "200": { description: Logged out }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Cookie used without the X-Requested-With header }
+
   /api/v1/api-keys:
     post:
       tags: [API Keys]
@@ -387,6 +415,7 @@ paths:
                   apiSecret: "<shown-once-store-securely>"
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { description: The business already has the maximum number of active keys (10 by default) }
     get:
       tags: [API Keys]
       summary: List API keys (secrets are never returned)

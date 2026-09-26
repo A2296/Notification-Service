@@ -2,7 +2,20 @@
 const config = {
   port: Number(process.env.PORT) || 5000,
   publicBaseUrl: (process.env.PUBLIC_BASE_URL || "").replace(/\/$/, ""),
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN || "1d",
+  isProduction: process.env.NODE_ENV === "production",
+
+  jwt: {
+    expiresIn: process.env.JWT_EXPIRES_IN || "1d",
+    // Tokens are only accepted with exactly this algorithm, issuer and audience
+    algorithm: "HS256",
+    issuer: "notification-service",
+    audience: "notification-service-dashboard",
+  },
+
+  apiKeys: {
+    // Active (non-revoked) keys a business may hold at once
+    maxActivePerBusiness: Number(process.env.MAX_ACTIVE_API_KEYS) || 10,
+  },
 
   rateLimit: {
     // per IP per minute on everything under /api (first line of defence)

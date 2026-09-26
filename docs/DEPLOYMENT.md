@@ -27,6 +27,7 @@ The service is one Docker container plus a MongoDB database. This guide deploys 
    `JWT_SECRET` is generated automatically.
 4. Click **Apply**. Render builds the Dockerfile and checks `GET /health`.
 5. Open `https://<service-name>.onrender.com/docs`. You should see the API documentation.
+   The business dashboard is at `https://<service-name>.onrender.com/`.
 
 Every push to `main` redeploys automatically. CI (`.github/workflows/ci.yml`) runs the tests
 on every pull request, so merge only when CI is green.
@@ -84,6 +85,13 @@ curl $URL/health
 - **Scaling:** the delivery worker claims notifications atomically, so running several
   instances is safe. For very high volume, run API and worker separately
   (`WORKER_ENABLED=false` on API instances).
+- **HTTPS:** always serve the service over HTTPS (Render does this automatically). Behind a proxy,
+  keep `TRUST_PROXY=1` so the app sees the original scheme and client IP. With `NODE_ENV=production`
+  (set in the Dockerfile) the dashboard session cookie is `Secure`, so it is never sent over plain HTTP.
 - **Secrets:** never commit `.env`. Rotate `JWT_SECRET` to log out all dashboard users;
-  businesses rotate their own API keys by creating a new key and revoking the old one.
+  a user can end all of their own sessions with **Sign out** (`POST /api/v1/auth/logout`).
+  Businesses rotate their own API keys by creating a new key and revoking the old one.
+- **Audit log:** security events are logged to stdout as JSON lines with `"type":"audit"`
+  (logins, logouts, registrations, API key creation/revocation, business suspensions).
+  Forward them to your log platform and alert on bursts of `auth.login.failure`.
 - **Backups:** enable Atlas backups (paid tiers) or schedule `mongodump`.

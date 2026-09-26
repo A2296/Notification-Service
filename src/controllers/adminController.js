@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Business = require("../models/businessSchema");
 const HttpError = require("../utils/httpError");
+const audit = require("../utils/audit");
 const notificationService = require("../services/notificationService");
 
 // Platform administration (role ADMIN). Businesses never reach these routes.
@@ -40,6 +41,12 @@ const updateBusinessStatus = async (req, res) => {
   if (!business) {
     throw new HttpError(404, "Business not found");
   }
+
+  audit("admin.business.status", req, {
+    adminId: req.user.id,
+    businessId: business._id,
+    status: business.status,
+  });
 
   res.status(200).json({
     success: true,

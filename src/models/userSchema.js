@@ -34,6 +34,12 @@ const userSchema = new mongoose.Schema(
       ref: "Business",
       default: null,
     },
+
+    // Embedded in every token; incrementing it (logout) invalidates all of the user's tokens
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,

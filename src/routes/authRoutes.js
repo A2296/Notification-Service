@@ -10,6 +10,7 @@ const {
   registerBusiness,
   loginUser,
   getMe,
+  logoutUser,
 } = require("../controllers/authController");
 
 router.post("/register", authLimiter, validate({ body: registerBody }), registerBusiness);
@@ -17,5 +18,7 @@ router.post("/register", authLimiter, validate({ body: registerBody }), register
 router.post("/login", authLimiter, validate({ body: loginBody }), loginUser);
 
 router.get("/me", authMiddleware, getMe);
+
+router.post("/logout", authMiddleware, logoutUser);
 
 module.exports = router;
