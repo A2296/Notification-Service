@@ -1,4 +1,6 @@
-# Notification Service
+# NotifyFlow
+
+NotifyFlow is a Notification Service platform. It gives registered businesses one place to sign up, send email, SMS, and in-app notifications, monitor delivery activity, and manage the API keys their own servers use.
 
 A multi-tenant notification platform that other businesses and applications integrate with.
 A business registers, gets an **API key and secret**, and calls one API to send **email**,
