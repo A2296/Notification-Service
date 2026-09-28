@@ -10,8 +10,15 @@ and tracks every status change.
 
 Built with Node.js, Express 5, MongoDB (Mongoose), Nodemailer and Twilio.
 
+- **Live demo:** https://notifyflow-labu.onrender.com (dashboard) ·
+  [API docs](https://notifyflow-labu.onrender.com/docs) ·
+  [health](https://notifyflow-labu.onrender.com/health)
 - **Interactive API docs:** `/docs` (Swagger UI), raw spec at `/openapi.json`
 - **Deployment guide:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+
+> The live demo runs on free hosting: after 15 minutes without visitors it sleeps, so the first
+> page load can take about a minute. Emails and SMS are logged by the server rather than
+> delivered, so no real messages are sent. Register any business on the dashboard to try it.
 
 ---
 
