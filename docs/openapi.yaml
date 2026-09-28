@@ -34,6 +34,8 @@ tags:
     description: Send and track notifications
   - name: Recipients
     description: Your end users and their in-app inboxes
+  - name: Schedules
+    description: Recurring notifications (daily, weekly or monthly)
   - name: Admin
     description: Platform operators only (role ADMIN)
   - name: System
@@ -744,6 +746,117 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/Notification" }
                   pagination: { $ref: "#/components/schemas/Pagination" }
+
+  /api/v1/schedules:
+    post:
+      tags: [Schedules]
+      summary: Create a recurring schedule
+      description: |
+        Sends the same message to the same recipients (1-100) on a repeat rule. `time` is the
+        wall-clock time in `timezone` (IANA name, default `UTC`), so a 09:00 schedule stays at
+        09:00 local time across daylight-saving changes.
+
+        - `DAILY`: every day at `time`
+        - `WEEKLY`: on `daysOfWeek` (0 = Sunday ... 6 = Saturday) at `time`
+        - `MONTHLY`: on `dayOfMonth` (1-31; 29-31 run on the last day of shorter months)
+
+        Each run creates normal notifications, tagged with `metadata.scheduleId`. If the service
+        was down when a run was due, it runs once when the service is back, not once per missed
+        run. At most 20 schedules per business.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, channel, message, recipients, repeat]
+              properties:
+                name: { type: string, maxLength: 100 }
+                channel: { type: string, enum: [EMAIL, SMS, IN_APP] }
+                subject: { type: string, maxLength: 200, description: Required for EMAIL }
+                message: { type: string, maxLength: 5000 }
+                metadata: { type: object }
+                recipients:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: { $ref: "#/components/schemas/RecipientInput" }
+                repeat:
+                  type: object
+                  required: [frequency, time]
+                  properties:
+                    frequency: { type: string, enum: [DAILY, WEEKLY, MONTHLY] }
+                    time: { type: string, example: "09:00" }
+                    daysOfWeek: { type: array, items: { type: integer, minimum: 0, maximum: 6 } }
+                    dayOfMonth: { type: integer, minimum: 1, maximum: 31 }
+                    timezone: { type: string, example: Africa/Lagos }
+                status: { type: string, enum: [ACTIVE, PAUSED], default: ACTIVE }
+            example:
+              name: Weekly digest
+              channel: EMAIL
+              subject: Your week at Acme
+              message: Here is what happened this week.
+              recipients:
+                - { email: ada@example.com }
+                - { id: user_2481, email: grace@example.com }
+              repeat: { frequency: WEEKLY, daysOfWeek: [1], time: "09:00", timezone: Africa/Lagos }
+      responses:
+        "201": { description: "Created; `nextRunAt` is the first run" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { description: The business already has the maximum number of schedules }
+    get:
+      tags: [Schedules]
+      summary: List your schedules
+      responses:
+        "200": { description: "Schedules, newest first" }
+
+  /api/v1/schedules/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Schedules]
+      summary: Get a schedule
+      responses:
+        "200": { description: "Schedule, including `nextRunAt` and `lastRun`" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Schedules]
+      summary: Change, pause or resume a schedule
+      description: |
+        Send only what changes, e.g. `{ "status": "PAUSED" }` or `{ "repeat": { "time": "10:30" } }`.
+        The result is validated as a whole and the next run is recalculated.
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: Updated }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Schedules]
+      summary: Delete a schedule (notifications already sent are kept)
+      responses:
+        "200": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/schedules/{id}/run:
+    post:
+      tags: [Schedules]
+      summary: Send to every recipient now, without changing the timetable
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202": { description: "Notifications created (`accepted`, `failed`)" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
 
   /api/v1/admin/businesses:
     get:

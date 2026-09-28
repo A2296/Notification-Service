@@ -13,6 +13,8 @@ The dashboard is dependency-free: it is built with standard HTML, CSS, and JavaS
 - Duplicate-send protection: a retried send reuses its `Idempotency-Key`
 - Delivery-activity table with server-side search and status filters
 - Failed notifications show the provider's error and a **Retry** button
+- **Send later**: schedule a one-off notification for a date and time
+- **Schedules**: recurring sends (daily, weekly on chosen days, or monthly) at a local time in any timezone, with pause, resume, run now and delete
 - API key management: generate (the secret is shown once), list, and revoke keys
 - Ready-to-run `curl` example using your key ID and the service's real URL
 - Demo mode with sample data when the page is opened without the API
@@ -68,6 +70,7 @@ All paths are relative to the page's own origin. The full reference is at `/docs
 | Send notification | `POST /api/v1/notifications` (with an `Idempotency-Key` header) |
 | Send in bulk | `POST /api/v1/notifications/bulk` (with an `Idempotency-Key` header) |
 | Retry a failed notification | `POST /api/v1/notifications/:id/retry` |
+| Recurring schedules | `GET/POST /api/v1/schedules`, `PATCH/DELETE /api/v1/schedules/:id`, `POST /api/v1/schedules/:id/run` |
 | List API keys | `GET /api/v1/api-keys` |
 | Create API key | `POST /api/v1/api-keys` |
 | Revoke API key | `DELETE /api/v1/api-keys/:id` |

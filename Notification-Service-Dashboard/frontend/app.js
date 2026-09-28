@@ -50,6 +50,7 @@ const STATUSES = new Set(['pending', 'processing', 'sent', 'delivered', 'failed'
 const TITLES = {
   send: 'Create a notification',
   activity: 'Notification activity',
+  schedules: 'Recurring schedules',
   credentials: 'API credentials'
 };
 
@@ -59,6 +60,7 @@ const state = {
   user: null,
   demo: [],
   apiKeys: [],
+  schedules: [],
   idempotencyKey: null,
   activityRequest: 0
 };
@@ -649,6 +651,10 @@ function refreshView(view = state.view) {
     return loadApiKeys();
   }
 
+  if (view === 'schedules') {
+    return loadSchedules();
+  }
+
   return refreshDashboard();
 }
 
@@ -694,6 +700,7 @@ function setSignedIn(user) {
 function setSignedOut() {
   state.user = null;
   state.apiKeys = [];
+  state.schedules = [];
 
   const account = el('#accountButton');
   account.textContent = 'Sign in';
@@ -705,6 +712,7 @@ function setSignedOut() {
   renderApiKeys();
   renderTable('#recentActivity', '#emptyRecent', [], notificationRow);
   renderTable('#activityRows', '#emptyActivity', [], notificationRow);
+  renderSchedules();
   el('#pageTitle').textContent =
     state.view === 'dashboard' ? greeting() : TITLES[state.view];
 }
@@ -728,6 +736,7 @@ function startDemo() {
   state.mode = 'demo';
   state.demo = sampleNotifications();
   state.apiKeys = [sampleApiKey()];
+  state.schedules = sampleSchedules();
 
   setConnection('Demo mode', false);
   setView(state.view);
@@ -920,10 +929,32 @@ function buildMessage(form) {
     body.metadata = { referenceId: text('referenceId') };
   }
 
+  // datetime-local is in the browser's timezone; the API wants an absolute time
+  if (text('sendAt')) {
+    body.scheduledAt = new Date(text('sendAt')).toISOString();
+  }
+
   return body;
 }
 
-const recipientFor = (value) => ({ [CHANNELS[selectedChannel()].recipientField]: value });
+const recipientObject = (channel, value) => ({ [CHANNELS[channel].recipientField]: value });
+const recipientFor = (value) => recipientObject(selectedChannel(), value);
+
+// "Mon, Sep 28, 9:00 AM", or "Mon, Sep 28, 9:00 AM GMT+1" when a timezone is given
+const formatWhen = (value, timeZone) =>
+  new Date(value).toLocaleString([], {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    ...(timeZone && { timeZone, timeZoneName: 'short' })
+  });
+
+const queuedText = (message, what) =>
+  message.scheduledAt
+    ? `${what} scheduled for ${formatWhen(message.scheduledAt)}.`
+    : `${what} queued for delivery.`;
 
 // [{ recipient, message }] -> "Invalid email address: bob@, carl@ (+2 more)"
 function summarizeFailures(failures) {
@@ -941,16 +972,35 @@ function summarizeFailures(failures) {
     .join('; ');
 }
 
-// Validation errors name the item ("notifications.3.recipient.email"); show the recipient instead
-function describeBulkError(error, recipients) {
-  const failures = (error.data?.errors || [])
-    .map((item) => {
-      const match = /^notifications\.(\d+)/.exec(item.field || '');
-      return match && { recipient: recipients[Number(match[1])], message: item.message };
-    })
-    .filter(Boolean);
+const FIELD_LABELS = {
+  name: 'Name',
+  subject: 'Subject',
+  message: 'Message',
+  'repeat.time': 'Time',
+  'repeat.timezone': 'Timezone',
+  'repeat.daysOfWeek': 'Days',
+  'repeat.dayOfMonth': 'Day of month'
+};
 
-  return failures.length ? summarizeFailures(failures) : error.message;
+// Validation errors name the item ("notifications.3.recipient.email" or "recipients.3.email");
+// show the recipient the user typed instead
+function describeItemErrors(error, recipients, listField) {
+  const itemPattern = new RegExp(`^${listField}\\.(\\d+)`);
+  const failures = [];
+  const other = [];
+
+  for (const item of error.data?.errors || []) {
+    const match = itemPattern.exec(item.field || '');
+
+    if (match) {
+      failures.push({ recipient: recipients[Number(match[1])], message: item.message });
+    } else {
+      other.push(`${FIELD_LABELS[item.field] || item.field}: ${item.message}`);
+    }
+  }
+
+  const parts = [...other, ...(failures.length ? [summarizeFailures(failures)] : [])];
+  return parts.length ? parts.join('; ') : error.message;
 }
 
 function resetSendForm(form) {
@@ -968,7 +1018,7 @@ async function sendSingle(message, recipient) {
     headers: { 'Idempotency-Key': state.idempotencyKey }
   });
 
-  return { text: `Notification ${notification.id} queued for delivery.`, failed: [] };
+  return { text: queuedText(message, `Notification ${notification.id}`), failed: [] };
 }
 
 async function sendBulk(message, recipients) {
@@ -996,7 +1046,7 @@ async function sendBulk(message, recipients) {
     .map((item) => ({ recipient: recipients[item.index], message: item.error }));
 
   if (failures.length === 0) {
-    return { text: `${result.accepted} notifications queued for delivery.`, failed: [] };
+    return { text: queuedText(message, `${result.accepted} notifications`), failed: [] };
   }
 
   return {
@@ -1024,6 +1074,11 @@ async function sendNotification(event) {
 
   if (recipients.length > MAX_BULK_RECIPIENTS) {
     output.textContent = `A bulk send is limited to ${MAX_BULK_RECIPIENTS} recipients and the list has ${recipients.length}. Split it into smaller batches.`;
+    return;
+  }
+
+  if (message.scheduledAt && new Date(message.scheduledAt) <= new Date()) {
+    output.textContent = 'Pick a "Send later" time in the future, or leave it empty to send now.';
     return;
   }
 
@@ -1074,7 +1129,7 @@ async function sendNotification(event) {
     output.textContent = text;
     refreshDashboard();
   } catch (error) {
-    output.textContent = `Unable to send: ${bulk ? describeBulkError(error, recipients) : error.message}`;
+    output.textContent = `Unable to send: ${bulk ? describeItemErrors(error, recipients, 'notifications') : error.message}`;
   } finally {
     setBusy(button, false);
   }
@@ -1099,6 +1154,356 @@ async function retryNotification(item, button) {
     refreshView();
   } catch (error) {
     showToast(`Could not retry: ${error.message}`);
+    setBusy(button, false);
+  }
+}
+
+// ---- Schedules ----
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+function describeRepeat(repeat) {
+  if (repeat.frequency === 'WEEKLY') {
+    const days =
+      repeat.daysOfWeek.length === 7
+        ? 'Every day'
+        : `Every ${repeat.daysOfWeek.map((day) => DAY_NAMES[day]).join(', ')}`;
+    return `${days} at ${repeat.time}`;
+  }
+
+  if (repeat.frequency === 'MONTHLY') {
+    return `Monthly on day ${repeat.dayOfMonth} at ${repeat.time}`;
+  }
+
+  return `Every day at ${repeat.time}`;
+}
+
+function describeLastRun(lastRun) {
+  if (!lastRun) {
+    return 'Not run yet';
+  }
+
+  if (lastRun.skipped) {
+    return `Last run skipped: ${lastRun.skipped}`;
+  }
+
+  const failed = lastRun.failed ? `, ${lastRun.failed} failed` : '';
+  return `Last run ${formatDate(lastRun.at)} · ${lastRun.accepted} sent${failed}`;
+}
+
+function sampleSchedules() {
+  return [
+    {
+      id: `sch_${randomId().slice(0, 6)}`,
+      name: 'Weekly digest',
+      channel: 'EMAIL',
+      subject: 'Your week at Acme',
+      message: 'Here is what happened this week.',
+      recipients: [{ email: 'maya@acme.com' }, { email: 'leo@northstar.io' }],
+      repeat: { frequency: 'WEEKLY', daysOfWeek: [1], time: '09:00', timezone: 'Africa/Lagos' },
+      status: 'ACTIVE',
+      nextRunAt: new Date(Date.now() + 2 * ONE_DAY_MS).toISOString(),
+      lastRun: { at: minutesAgo(60 * 24 * 5), accepted: 2, failed: 0 },
+      runCount: 12
+    }
+  ];
+}
+
+function scheduleRow(schedule) {
+  const row = document.createElement('tr');
+  const channel =
+    CHANNELS[String(schedule.channel).toLowerCase().replace('_', '-')] || CHANNELS['in-app'];
+  const paused = schedule.status === 'PAUSED';
+
+  const summary = document.createElement('td');
+  summary.append(
+    createElement('strong', { text: schedule.name }),
+    createElement('span', { className: 'row-note', text: describeLastRun(schedule.lastRun) })
+  );
+
+  const channelCell = document.createElement('td');
+  channelCell.append(
+    createElement('span', { className: 'channel', text: `${channel.icon} ${channel.name}` })
+  );
+
+  const repeat = document.createElement('td');
+  repeat.append(
+    describeRepeat(schedule.repeat),
+    createElement('span', { className: 'row-note', text: schedule.repeat.timezone })
+  );
+
+  const status = document.createElement('td');
+  status.append(
+    createElement('span', {
+      className: `status ${paused ? 'paused' : 'active'}`,
+      text: paused ? 'paused' : 'active'
+    })
+  );
+
+  const action = (label, className, handler) => {
+    const button = createElement('button', { className: `${className} compact-button`, text: label });
+    button.type = 'button';
+    button.setAttribute('aria-label', `${label} ${schedule.name}`);
+    button.addEventListener('click', () => handler(schedule, button));
+    return button;
+  };
+
+  const actions = createElement('div', { className: 'schedule-actions' });
+  actions.append(
+    action(paused ? 'Resume' : 'Pause', 'secondary-button', toggleSchedule),
+    action('Run now', 'secondary-button', runScheduleNow),
+    action('Delete', 'danger-button', deleteSchedule)
+  );
+  const actionsCell = document.createElement('td');
+  actionsCell.append(actions);
+
+  row.append(
+    summary,
+    channelCell,
+    createElement('td', { text: String(schedule.recipients.length) }),
+    repeat,
+    createElement('td', { text: paused || !schedule.nextRunAt ? '—' : formatWhen(schedule.nextRunAt, schedule.repeat.timezone) }),
+    status,
+    actionsCell
+  );
+
+  return row;
+}
+
+function renderSchedules() {
+  renderTable('#scheduleRows', '#emptySchedules', state.schedules, scheduleRow);
+}
+
+async function loadSchedules() {
+  if (state.mode !== 'live' || !hasBusiness()) {
+    renderSchedules();
+    return;
+  }
+
+  try {
+    const { schedules } = await callApi('/schedules');
+    state.schedules = schedules;
+    renderSchedules();
+  } catch (error) {
+    showToast(`Could not load schedules: ${error.message}`);
+  }
+}
+
+function updateScheduleForm() {
+  const channel = el('#scheduleChannel').value;
+  const settings = CHANNELS[channel];
+  const frequency = el('#scheduleFrequency').value;
+
+  el('#scheduleRecipientsLabel').textContent = settings.bulkLabel;
+  el('#scheduleRecipients').placeholder = settings.bulkPlaceholder;
+  el('#scheduleSubject').required = channel === 'email';
+  el('#scheduleSubjectHint').textContent =
+    channel === 'email' ? '(required for email)' : '(optional)';
+  el('#scheduleText').maxLength = channel === 'sms' ? 1600 : 5000;
+
+  document
+    .querySelectorAll('.weekly-only')
+    .forEach((field) => field.classList.toggle('hidden', frequency !== 'WEEKLY'));
+  document
+    .querySelectorAll('.monthly-only')
+    .forEach((field) => field.classList.toggle('hidden', frequency !== 'MONTHLY'));
+}
+
+function setupTimezones() {
+  el('#scheduleTimezone').value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
+  const zones = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
+  el('#timezoneList').replaceChildren(
+    ...['UTC', ...zones].map((zone) => {
+      const option = document.createElement('option');
+      option.value = zone;
+      return option;
+    })
+  );
+}
+
+function resetScheduleForm(form) {
+  const timezone = el('#scheduleTimezone').value;
+
+  form.reset();
+  el('#scheduleTimezone').value = timezone;
+  updateScheduleForm();
+}
+
+function buildSchedule(form, recipients) {
+  const channel = el('#scheduleChannel').value;
+  const frequency = el('#scheduleFrequency').value;
+  const daysOfWeek = [...form.querySelectorAll('input[name="weekday"]:checked')].map((box) =>
+    Number(box.value)
+  );
+
+  const body = {
+    name: el('#scheduleName').value.trim(),
+    channel: CHANNELS[channel].api,
+    message: el('#scheduleText').value.trim(),
+    recipients: recipients.map((value) => recipientObject(channel, value)),
+    repeat: {
+      frequency,
+      time: el('#scheduleTime').value,
+      timezone: el('#scheduleTimezone').value.trim() || 'UTC',
+      ...(frequency === 'WEEKLY' && { daysOfWeek }),
+      ...(frequency === 'MONTHLY' && { dayOfMonth: Number(el('#scheduleDay').value) })
+    }
+  };
+
+  const subject = el('#scheduleSubject').value.trim();
+
+  if (subject) {
+    body.subject = subject;
+  }
+
+  return body;
+}
+
+async function createSchedule(event) {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  const output = el('#scheduleOutput');
+  const button = el('#createSchedule');
+  const recipients = parseRecipients(el('#scheduleRecipients').value);
+  const body = buildSchedule(form, recipients);
+
+  if (recipients.length === 0 || recipients.length > MAX_BULK_RECIPIENTS) {
+    output.textContent = `Add between 1 and ${MAX_BULK_RECIPIENTS} recipients (the list has ${recipients.length}).`;
+    return;
+  }
+
+  if (body.repeat.frequency === 'WEEKLY' && body.repeat.daysOfWeek.length === 0) {
+    output.textContent = 'Pick at least one day of the week.';
+    return;
+  }
+
+  if (state.mode === 'demo') {
+    state.schedules.unshift({
+      ...body,
+      id: `sch_${randomId().slice(0, 6)}`,
+      status: 'ACTIVE',
+      nextRunAt: new Date(Date.now() + ONE_DAY_MS).toISOString(),
+      lastRun: null,
+      runCount: 0
+    });
+    resetScheduleForm(form);
+    renderSchedules();
+    output.textContent = 'Demo schedule added. Open the dashboard from your Notification Service to schedule for real.';
+    return;
+  }
+
+  if (!hasBusiness()) {
+    output.textContent = 'Sign in with a business account to create schedules.';
+    openAuthDialog();
+    return;
+  }
+
+  output.textContent = 'Creating schedule…';
+  setBusy(button, true);
+
+  try {
+    const { schedule } = await callApi('/schedules', { method: 'POST', body });
+
+    resetScheduleForm(form);
+    output.textContent = `"${schedule.name}" created. First run: ${formatWhen(schedule.nextRunAt, schedule.repeat.timezone)}.`;
+    await loadSchedules();
+  } catch (error) {
+    output.textContent = `Could not create the schedule. ${describeItemErrors(error, recipients, 'recipients')}`;
+  } finally {
+    setBusy(button, false);
+  }
+}
+
+async function toggleSchedule(schedule, button) {
+  const status = schedule.status === 'PAUSED' ? 'ACTIVE' : 'PAUSED';
+  const done = `"${schedule.name}" ${status === 'ACTIVE' ? 'resumed' : 'paused'}.`;
+
+  if (state.mode === 'demo') {
+    schedule.status = status;
+    schedule.nextRunAt = status === 'ACTIVE' ? new Date(Date.now() + ONE_DAY_MS).toISOString() : null;
+    renderSchedules();
+    showToast(done);
+    return;
+  }
+
+  setBusy(button, true);
+
+  try {
+    await callApi(`/schedules/${encodeURIComponent(schedule.id)}`, {
+      method: 'PATCH',
+      body: { status }
+    });
+    showToast(done);
+    await loadSchedules();
+  } catch (error) {
+    showToast(`Could not update the schedule: ${error.message}`);
+    setBusy(button, false);
+  }
+}
+
+async function runScheduleNow(schedule, button) {
+  const count = schedule.recipients.length;
+
+  if (!window.confirm(`Send "${schedule.name}" to its ${count} recipient${count === 1 ? '' : 's'} now? The regular timetable is not affected.`)) {
+    return;
+  }
+
+  if (state.mode === 'demo') {
+    for (const recipient of schedule.recipients) {
+      state.demo.unshift({
+        id: `ntf_${randomId().slice(0, 6)}`,
+        subject: schedule.subject,
+        message: schedule.message,
+        channel: schedule.channel,
+        to: Object.values(recipient)[0],
+        status: 'PENDING',
+        createdAt: new Date().toISOString()
+      });
+    }
+    schedule.lastRun = { at: new Date().toISOString(), accepted: count, failed: 0 };
+    renderSchedules();
+    showToast(`Demo: "${schedule.name}" sent to ${count} recipients.`);
+    return;
+  }
+
+  setBusy(button, true);
+
+  try {
+    const result = await callApi(`/schedules/${encodeURIComponent(schedule.id)}/run`, {
+      method: 'POST'
+    });
+    const failed = result.failed ? `, ${result.failed} could not be created` : '';
+    showToast(`"${schedule.name}": ${result.accepted} notifications queued${failed}.`);
+    await loadSchedules();
+  } catch (error) {
+    showToast(`Could not run the schedule: ${error.message}`);
+    setBusy(button, false);
+  }
+}
+
+async function deleteSchedule(schedule, button) {
+  if (!window.confirm(`Delete "${schedule.name}"? It will stop sending. Notifications already sent are kept.`)) {
+    return;
+  }
+
+  if (state.mode === 'demo') {
+    state.schedules = state.schedules.filter((item) => item !== schedule);
+    renderSchedules();
+    showToast('Demo schedule deleted.');
+    return;
+  }
+
+  setBusy(button, true);
+
+  try {
+    await callApi(`/schedules/${encodeURIComponent(schedule.id)}`, { method: 'DELETE' });
+    showToast(`"${schedule.name}" deleted.`);
+    await loadSchedules();
+  } catch (error) {
+    showToast(`Could not delete the schedule: ${error.message}`);
     setBusy(button, false);
   }
 }
@@ -1206,6 +1611,11 @@ el('#activitySearch').addEventListener('input', () => {
 el('#statusFilter').addEventListener('change', loadActivity);
 el('#refreshActivity').addEventListener('click', loadActivity);
 
+el('#scheduleForm').addEventListener('submit', createSchedule);
+el('#scheduleChannel').addEventListener('change', updateScheduleForm);
+el('#scheduleFrequency').addEventListener('change', updateScheduleForm);
+el('#refreshSchedules').addEventListener('click', loadSchedules);
+
 const notificationForm = el('#notificationForm');
 
 notificationForm.addEventListener('submit', sendNotification);
@@ -1255,6 +1665,8 @@ el('#revokeKey').addEventListener('click', () => revokeKey());
 
 async function init() {
   updateSendForm();
+  setupTimezones();
+  updateScheduleForm();
   renderApiKeys();
   setView(location.hash.slice(1));
 

@@ -34,12 +34,13 @@ Built with Node.js, Express 5, MongoDB (Mongoose), Nodemailer and Twilio.
 | Tracking | `PENDING → PROCESSING → SENT → DELIVERED / FAILED`, with a timestamped event history per notification |
 | Reliability | `Idempotency-Key` header prevents duplicate sends; manual retry of failed notifications (API or dashboard) |
 | Bulk sends | Up to 100 notifications per request, shared fields plus per-recipient overrides, per-item results |
+| Scheduling | Send later (`scheduledAt`) and recurring schedules: daily, weekly or monthly at a local time in the business's timezone, with pause, resume and run now |
 | Recipients | Store your users' contact details once, then send by your own user ID |
 | Validation | Every request is validated with zod and returns field-level error messages |
 | Security | Helmet headers and a strict CSP for the dashboard, CSRF protection, per-IP login rate limit, per-business API rate limit, NoSQL/regex injection protection, bcrypt passwords, audit log |
 | Dashboard | Business web dashboard served by the API at `/` (see below) |
 | Operations | Docker, docker-compose (with a local email inbox), `/health`, graceful shutdown, GitHub Actions CI, Render blueprint |
-| Docs & tests | OpenAPI 3 spec + Swagger UI; 76 tests |
+| Docs & tests | OpenAPI 3 spec + Swagger UI; 94 tests |
 
 ---
 
@@ -55,6 +56,8 @@ with no separate hosting or configuration.
 - Bulk mode: paste up to 100 recipients and send the same message to all of them
 - Delivery-activity table with server-side search and status filters
 - Failed notifications show the provider's error and a **Retry** button
+- **Send later**: pick a date and time in the composer
+- **Schedules** page: recurring sends (every day, chosen weekdays or a day of the month) with pause, resume, run now and delete
 - API key management: generate (secret shown once), list, revoke, plus a ready-to-run `curl` sample
 - Demo mode with sample data when the page is opened without the API (e.g. from a static server)
 - Responsive layout for desktop and mobile devices
@@ -278,6 +281,9 @@ Full request/response details are in **`/docs`**.
 | `POST/GET /api/v1/api-keys`, `DELETE /api/v1/api-keys/:id` | JWT | Create, list, revoke API keys |
 | `POST /api/v1/notifications` | API key or JWT | Send a notification |
 | `POST /api/v1/notifications/bulk` | API key or JWT | Send up to 100 notifications in one request |
+| `POST/GET /api/v1/schedules` | API key or JWT | Create / list recurring schedules |
+| `GET/PATCH/DELETE /api/v1/schedules/:id` | API key or JWT | View, change, pause/resume or delete a schedule |
+| `POST /api/v1/schedules/:id/run` | API key or JWT | Send a schedule's message now |
 | `GET /api/v1/notifications` | API key or JWT | List with `search`, `channel`, `status`, `recipientId`, `from`, `to`, `page`, `limit` |
 | `GET /api/v1/notifications/stats` | API key or JWT | Counts by status and channel |
 | `GET /api/v1/notifications/:id` | API key or JWT | Details + status history |
@@ -306,6 +312,71 @@ All settings are environment variables, documented in [.env.example](.env.exampl
 Providers default to `console` (logged, not sent), so the service runs with no third-party
 accounts. Switch to real delivery with `EMAIL_PROVIDER=smtp` and `SMS_PROVIDER=twilio`;
 see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#4-turn-on-real-delivery-optional).
+
+---
+
+## Real email and SMS with free trials
+
+No code changes are needed: add the settings below as environment variables (on Render:
+your service → **Environment**; locally: your `.env` file, then restart `npm run dev`).
+Email and SMS are independent, so you can turn on just one.
+
+### Email with Brevo (free plan, about 300 emails a day)
+
+1. Sign up at [brevo.com](https://www.brevo.com). If Brevo asks you to complete your profile
+   or confirm your account, do that first; new accounts can't send until they are activated.
+2. **Senders, Domains & Dedicated IPs → Senders → Add a sender**, and confirm the address from
+   the email Brevo sends you. This is the address your notifications come from.
+3. **SMTP & API → SMTP**: note the **Login** (looks like `123abc@smtp-brevo.com`) and click
+   **Generate a new SMTP key**. Copy the key; Brevo shows it only once.
+4. Add these settings:
+
+   | Variable | Value |
+   |---|---|
+   | `EMAIL_PROVIDER` | `smtp` |
+   | `SMTP_HOST` | `smtp-relay.brevo.com` |
+   | `SMTP_PORT` | `2525` (Render's free plan blocks 587; elsewhere 587 also works) |
+   | `SMTP_SECURE` | `false` |
+   | `SMTP_USER` | the Login from step 3 |
+   | `SMTP_PASS` | the SMTP key from step 3 |
+   | `EMAIL_FROM` | the sender address you confirmed in step 2 |
+
+Emails from a free address (e.g. Gmail) sent through Brevo often land in spam. For real use,
+add your own domain under **Senders, Domains & Dedicated IPs → Domains** and create the DNS
+records Brevo shows you, then use an address on that domain as `EMAIL_FROM`.
+
+### SMS with Twilio (free trial credit)
+
+1. Sign up at [twilio.com/try-twilio](https://www.twilio.com/try-twilio) and verify your email
+   and your own phone number.
+2. In the Twilio Console, click **Get a phone number** (a free trial number).
+3. On the Console home page, under **Account Info**, copy the **Account SID** and **Auth Token**.
+4. **Phone Numbers → Manage → Verified Caller IDs**: add every phone you want to text during the
+   trial. A trial account can only send to verified numbers.
+5. **Messaging → Settings → Geo permissions**: tick the countries you will send to (for example
+   Nigeria), or Twilio rejects those numbers.
+6. Add these settings:
+
+   | Variable | Value |
+   |---|---|
+   | `SMS_PROVIDER` | `twilio` |
+   | `TWILIO_ACCOUNT_SID` | the Account SID (starts with `AC`) |
+   | `TWILIO_AUTH_TOKEN` | the Auth Token |
+   | `TWILIO_FROM_NUMBER` | your Twilio number in international format, e.g. `+15551234567` |
+   | `PUBLIC_BASE_URL` | your service's public URL, e.g. `https://notifyflow-labu.onrender.com` |
+
+With `PUBLIC_BASE_URL` set, Twilio reports each delivery back, so SMS notifications move from
+**Sent** to **Delivered**; the callback is verified with your Auth Token. Trial messages start
+with "Sent from your Twilio trial account". To text any number, upgrade the Twilio account (you
+pay per message). Some countries, including Nigeria, filter messages from unregistered senders,
+so check Twilio's country guidelines before relying on SMS in production.
+
+### Check that it works
+
+Send a test from the dashboard to your own email address and verified phone. In **Activity**,
+the email shows **Sent** and the SMS **Sent**, then **Delivered**. If something is wrong, the
+notification shows **Failed** with the provider's error (for example a wrong SMTP key or an
+unverified number). Fix the setting, then click **Retry** on that notification.
 
 ---
 
@@ -346,9 +417,10 @@ docker rm -f mongo-test     # when you're done
 If port 27017 is already in use (for example by a local MongoDB), stop that first or point the
 tests elsewhere with `TEST_DB_URL`.
 
-76 tests run against a real MongoDB (override with `TEST_DB_URL`), covering auth,
+94 tests run against a real MongoDB (override with `TEST_DB_URL`), covering auth,
 sessions and logout, JWT tampering, the dashboard CSP, API keys, sending on every channel,
-bulk sends, retries and failures, scheduling, crash recovery, idempotency, tenant isolation,
+bulk sends, recurring schedules (timezones, daylight saving, crash safety), retries and failures,
+scheduling, crash recovery, idempotency, tenant isolation,
 admin controls, rate limits and webhook signatures. Providers are swapped for fakes, so no email
 or SMS is sent; the SMTP provider itself is tested against in-process fake mail servers. GitHub Actions runs the tests, `npm audit` and a
 Docker build on every pull request.
@@ -363,16 +435,17 @@ Docker build on every pull request.
 │   ├── server.js               Startup: env check, DB connect, worker, graceful shutdown
 │   ├── docs.js                 Swagger UI at /docs
 │   ├── config/                 Environment config and MongoDB connection
-│   ├── models/                 Business, User, ApiKey, Recipient, Notification
+│   ├── models/                 Business, User, ApiKey, Recipient, Notification, Schedule
 │   ├── validators/schemas.js   zod request schemas
 │   ├── middleware/             JWT auth, API key auth, roles, rate limits, validation, errors
 │   ├── routes/                 /api/v1 routers
 │   ├── controllers/            Request handlers
 │   ├── services/
-│   │   ├── notificationService.js   Create, list, inbox, retry, stats
-│   │   ├── deliveryWorker.js        Queue processing, retries, backoff
+│   │   ├── notificationService.js   Create (single and bulk), list, inbox, retry, stats
+│   │   ├── scheduleService.js       Runs due recurring schedules
+│   │   ├── deliveryWorker.js        Queue processing, retries, backoff, due schedules
 │   │   └── providers/               console, smtp, twilio, in-app
-│   └── utils/                  API key generation, session cookie, audit log, HttpError
+│   └── utils/                  API keys, session cookie, audit log, recurrence rules, HttpError
 ├── scripts/createAdmin.js      Create a platform admin
 ├── docs/                       openapi.yaml, DEPLOYMENT.md
 ├── test/                       Integration tests (node:test + supertest)

@@ -50,6 +50,9 @@ $env:DB_CONNECTION_STRING="mongodb+srv://..."; $env:ADMIN_EMAIL="you@example.com
 
 ## 4. Turn on real delivery (optional)
 
+Step-by-step trial setup for Brevo (email) and Twilio (SMS) is in the README:
+[Real email and SMS with free trials](../README.md#real-email-and-sms-with-free-trials).
+
 ### Email (any SMTP provider)
 
 Set `EMAIL_PROVIDER=smtp` and:
