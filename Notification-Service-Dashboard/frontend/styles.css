@@ -358,6 +358,50 @@ td strong {
 .retry-button {
   margin-left:8px
 }
+.status.paused {
+  background:#eef1f2;
+  color:#5d6b73
+}
+.weekday-picker {
+  border:0;
+  padding:0;
+  margin:0;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px
+}
+.weekday-picker legend {
+  padding:0;
+  margin-bottom:7px;
+  font-size:12px;
+  font-weight:700;
+  color:#43545e
+}
+.weekday {
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:8px 11px;
+  cursor:pointer
+}
+.weekday input {
+  width:auto;
+  margin:0
+}
+.schedule-actions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  justify-content:flex-end
+}
+.row-note {
+  display:block;
+  margin-top:3px;
+  color:var(--muted);
+  font-size:11px
+}
 .failure-reason {
   display:block;
   max-width:260px;

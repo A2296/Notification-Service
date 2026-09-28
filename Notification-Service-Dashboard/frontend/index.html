@@ -23,6 +23,7 @@
           <a class="nav-link active" href="#dashboard" data-view="dashboard"><span>▦</span> Overview</a>
           <a class="nav-link" href="#send" data-view="send"><span>✦</span> Send notification</a>
           <a class="nav-link" href="#activity" data-view="activity"><span>◷</span> Activity</a>
+          <a class="nav-link" href="#schedules" data-view="schedules"><span>⟳</span> Schedules</a>
           <a class="nav-link" href="#credentials" data-view="credentials"><span>⌘</span> API credentials</a>
         </nav>
         <div class="sidebar-footer">
@@ -79,6 +80,7 @@
             <div class="form-grid">
               <label class="single-only"><span id="recipientLabel">Recipient email</span> <input id="recipientInput" name="recipient" type="email" required maxlength="254" autocomplete="off" placeholder="name@example.com" /></label>
               <label>Reference ID <input name="referenceId" type="text" maxlength="100" placeholder="Optional order or user ID" /></label>
+              <label><span>Send later <small>(optional, your local time)</small></span> <input id="sendAt" name="sendAt" type="datetime-local" /></label>
               <label class="full-width bulk-only hidden"><span id="recipientsLabel">Recipient emails</span> <textarea id="recipientsInput" name="recipients" rows="5" maxlength="30000" autocomplete="off"></textarea><small id="recipientsHint">One per line, or separated by commas. Up to 100; duplicates are skipped.</small></label>
               <label class="full-width subject-field"><span>Subject <small id="subjectHint">(required for email)</small></span> <input id="subjectInput" name="subject" type="text" required maxlength="200" placeholder="Your notification subject" /></label>
               <label class="full-width">Message <textarea id="messageInput" name="message" required rows="7" maxlength="5000" placeholder="Write your message…"></textarea><small id="messageHint">Up to 5,000 characters.</small></label>
@@ -91,6 +93,38 @@
           <div class="section-heading"><div><p class="eyebrow">DELIVERY LOG</p><h2>Notification activity</h2><p class="subtle">Search status and delivery history across every channel.</p></div><button class="secondary-button" id="refreshActivity" type="button">Refresh</button></div>
           <div class="content-card filter-bar"><label class="sr-only" for="activitySearch">Search notification activity</label><input id="activitySearch" type="search" maxlength="100" placeholder="Search recipient, subject or message" /><label class="sr-only" for="statusFilter">Filter by delivery status</label><select id="statusFilter"><option value="all">All statuses</option><option value="pending">Pending</option><option value="processing">Processing</option><option value="sent">Sent</option><option value="delivered">Delivered</option><option value="failed">Failed</option></select></div>
           <div class="content-card table-wrap"><table><thead><tr><th>Notification</th><th>Channel</th><th>Recipient</th><th>Status</th><th>Created</th></tr></thead><tbody id="activityRows"></tbody></table><p class="empty-state hidden" id="emptyActivity">No matching notifications found.</p></div>
+        </section>
+
+        <section class="view" id="schedules">
+          <div class="section-heading"><div><p class="eyebrow">AUTOMATION</p><h2>Recurring schedules</h2><p class="subtle">Send the same message to the same recipients automatically, every day, week or month.</p></div></div>
+          <form class="content-card send-form" id="scheduleForm">
+            <div class="form-grid">
+              <label>Name <input id="scheduleName" type="text" required maxlength="100" placeholder="e.g. Weekly digest" /></label>
+              <label>Channel <select id="scheduleChannel"><option value="email">Email</option><option value="sms">SMS</option><option value="in-app">In-app</option></select></label>
+              <label class="full-width"><span id="scheduleRecipientsLabel">Recipient emails</span> <textarea id="scheduleRecipients" rows="4" required maxlength="30000" autocomplete="off"></textarea><small>One per line, or separated by commas. Up to 100.</small></label>
+              <label class="full-width"><span>Subject <small id="scheduleSubjectHint">(required for email)</small></span> <input id="scheduleSubject" type="text" maxlength="200" placeholder="Your notification subject" /></label>
+              <label class="full-width">Message <textarea id="scheduleText" rows="4" required maxlength="5000" placeholder="Write your message…"></textarea></label>
+              <label>Repeats <select id="scheduleFrequency"><option value="DAILY">Every day</option><option value="WEEKLY">Every week</option><option value="MONTHLY">Every month</option></select></label>
+              <label>At <input id="scheduleTime" type="time" required value="09:00" /></label>
+              <fieldset class="full-width weekday-picker weekly-only hidden"><legend>On these days</legend>
+                <label class="weekday"><input type="checkbox" name="weekday" value="1" checked /><span>Mon</span></label>
+                <label class="weekday"><input type="checkbox" name="weekday" value="2" /><span>Tue</span></label>
+                <label class="weekday"><input type="checkbox" name="weekday" value="3" /><span>Wed</span></label>
+                <label class="weekday"><input type="checkbox" name="weekday" value="4" /><span>Thu</span></label>
+                <label class="weekday"><input type="checkbox" name="weekday" value="5" /><span>Fri</span></label>
+                <label class="weekday"><input type="checkbox" name="weekday" value="6" /><span>Sat</span></label>
+                <label class="weekday"><input type="checkbox" name="weekday" value="0" /><span>Sun</span></label>
+              </fieldset>
+              <label class="monthly-only hidden">Day of month <input id="scheduleDay" type="number" min="1" max="31" value="1" /><small>29–31 run on the last day of shorter months.</small></label>
+              <label>Timezone <input id="scheduleTimezone" type="text" list="timezoneList" required maxlength="100" autocomplete="off" /><datalist id="timezoneList"></datalist></label>
+            </div>
+            <div class="form-actions"><output id="scheduleOutput"></output><button class="primary-button" id="createSchedule" type="submit">Create schedule <span>→</span></button></div>
+          </form>
+          <section class="content-card table-wrap key-list">
+            <div class="section-heading compact"><div><p class="eyebrow">YOUR SCHEDULES</p><h3>Upcoming sends</h3></div><button class="secondary-button" id="refreshSchedules" type="button">Refresh</button></div>
+            <table><thead><tr><th>Schedule</th><th>Channel</th><th>Recipients</th><th>Repeats</th><th>Next run</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="scheduleRows"></tbody></table>
+            <p class="empty-state hidden" id="emptySchedules">No schedules yet. Create one above.</p>
+          </section>
         </section>
 
         <section class="view" id="credentials">

@@ -2,6 +2,7 @@ const Notification = require("../models/notificationSchema");
 const Business = require("../models/businessSchema");
 const config = require("../config");
 const { getProvider } = require("./providers");
+const scheduleService = require("./scheduleService");
 
 // MongoDB-backed delivery queue.
 // The API stores notifications as PENDING and returns immediately; this worker
@@ -103,6 +104,11 @@ const tick = async () => {
 
   running = true;
   try {
+    // Recurring schedules first, so their notifications go out in this same tick.
+    // A schedule problem must never stop normal delivery.
+    await scheduleService
+      .runDueSchedules()
+      .catch((error) => console.error(`Schedule runner error: ${error.message}`));
     await processPending();
   } catch (error) {
     console.error(`Delivery worker error: ${error.message}`);

@@ -12,6 +12,7 @@ router.use("/api-keys", require("./apiKeyRoutes"));
 // Integration API: API key (server-to-server) or dashboard JWT, rate limited per business
 router.use("/recipients", businessAuth, businessLimiter, require("./recipientRoutes"));
 router.use("/notifications", businessAuth, businessLimiter, require("./notificationRoutes"));
+router.use("/schedules", businessAuth, businessLimiter, require("./scheduleRoutes"));
 
 // Platform operators
 router.use("/admin", require("./adminRoutes"));

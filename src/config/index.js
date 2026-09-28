@@ -12,6 +12,11 @@ const config = {
     audience: "notification-service-dashboard",
   },
 
+  schedules: {
+    // Recurring schedules a business may have (each sends to up to 100 recipients per run)
+    maxPerBusiness: Number(process.env.MAX_SCHEDULES) || 20,
+  },
+
   apiKeys: {
     // Active (non-revoked) keys a business may hold at once
     maxActivePerBusiness: Number(process.env.MAX_ACTIVE_API_KEYS) || 10,

@@ -1,5 +1,6 @@
 const { z } = require("zod");
 const { CHANNELS, STATUSES } = require("../models/notificationSchema");
+const { FREQUENCIES, isValidTimeZone } = require("../utils/recurrence");
 
 const text = (max) => z.string().trim().min(1).max(max);
 const email = z.string().trim().toLowerCase().pipe(z.email());
@@ -174,6 +175,125 @@ const bulkNotificationBody = z
     return valid ? { notifications } : z.NEVER;
   });
 
+// ---- Schedules (recurring notifications) ----
+const scheduleRepeat = z
+  .object({
+    frequency: z.string().trim().toUpperCase().pipe(z.enum(FREQUENCIES)),
+    time: z
+      .string()
+      .trim()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use 24-hour HH:MM, e.g. 09:00"),
+    daysOfWeek: z
+      .array(z.number().int().min(0).max(6))
+      .min(1, "Pick at least one day (0 = Sunday ... 6 = Saturday)")
+      .max(7)
+      .optional(),
+    dayOfMonth: z.number().int().min(1).max(31).optional(),
+    timezone: z
+      .string()
+      .trim()
+      .max(100)
+      .default("UTC")
+      .refine(isValidTimeZone, 'Unknown timezone; use an IANA name such as "Africa/Lagos"'),
+  })
+  .superRefine((repeat, ctx) => {
+    if (repeat.frequency === "WEEKLY" && !repeat.daysOfWeek) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["daysOfWeek"],
+        message: "daysOfWeek is required for WEEKLY (0 = Sunday ... 6 = Saturday)",
+      });
+    }
+
+    if (repeat.frequency === "MONTHLY" && !repeat.dayOfMonth) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["dayOfMonth"],
+        message: "dayOfMonth (1-31) is required for MONTHLY",
+      });
+    }
+  })
+  // Keep only the fields the frequency uses
+  .transform(({ frequency, time, timezone, daysOfWeek, dayOfMonth }) => ({
+    frequency,
+    time,
+    timezone,
+    ...(frequency === "WEEKLY" && {
+      daysOfWeek: [...new Set(daysOfWeek)].sort((a, b) => a - b),
+    }),
+    ...(frequency === "MONTHLY" && { dayOfMonth }),
+  }));
+
+// The message is checked once per recipient with the single-send rules (channel, subject,
+// address format...), and errors point at the recipient: "recipients.2.email".
+const scheduleBody = z
+  .object({
+    name: text(100),
+    ...Object.fromEntries(
+      ["channel", "subject", "message", "metadata"].map((field) => [field, z.unknown().optional()])
+    ),
+    recipients: z
+      .array(z.record(z.string(), z.unknown()))
+      .min(1, "Add at least one recipient")
+      .max(MAX_BULK_NOTIFICATIONS, `At most ${MAX_BULK_NOTIFICATIONS} recipients per schedule`),
+    repeat: scheduleRepeat,
+    status: z.enum(["ACTIVE", "PAUSED"]).default("ACTIVE"),
+  })
+  .transform((body, ctx) => {
+    const { channel, subject, message, metadata } = body;
+    const recipients = [];
+    const reported = new Set();
+    let notification;
+
+    body.recipients.forEach((recipient, index) => {
+      const result = createNotificationBody.safeParse({ channel, subject, message, metadata, recipient });
+
+      if (result.success) {
+        recipients.push(result.data.recipient);
+        notification = notification || result.data;
+        return;
+      }
+
+      for (const issue of result.error.issues) {
+        const [first, ...rest] = issue.path;
+        const path = first === "recipient" ? ["recipients", index, ...rest] : issue.path;
+        const key = `${path.join(".")}|${issue.message}`;
+
+        // A problem with the shared message (e.g. missing subject) is reported once
+        if (!reported.has(key)) {
+          reported.add(key);
+          ctx.addIssue({ code: "custom", path, message: issue.message });
+        }
+      }
+    });
+
+    if (reported.size > 0) {
+      return z.NEVER;
+    }
+
+    return {
+      name: body.name,
+      channel: notification.channel,
+      subject: notification.subject,
+      message: notification.message,
+      metadata: notification.metadata ?? {},
+      recipients,
+      repeat: body.repeat,
+      status: body.status,
+    };
+  });
+
+// PATCH: any subset of the fields; merged with the stored schedule, then checked with scheduleBody
+const updateScheduleBody = z.object({
+  ...Object.fromEntries(
+    ["name", "channel", "subject", "message", "metadata", "recipients", "status"].map((field) => [
+      field,
+      z.unknown().optional(),
+    ])
+  ),
+  repeat: z.record(z.string(), z.unknown()).optional(),
+});
+
 const listNotificationsQuery = z.object({
   ...pagination,
   search: text(100).optional(),
@@ -216,6 +336,8 @@ module.exports = {
   createNotificationBody,
   bulkNotificationBody,
   MAX_BULK_NOTIFICATIONS,
+  scheduleBody,
+  updateScheduleBody,
   listNotificationsQuery,
   inboxQuery,
   idParams,

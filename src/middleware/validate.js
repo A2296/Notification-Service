@@ -2,6 +2,16 @@
 // Parsed (trimmed, coerced, defaulted) values are placed on req.validated.
 // Because every field is type-checked here, user input can never smuggle
 // MongoDB operators (e.g. {"$ne": null}) into queries.
+const sendValidationErrors = (res, error) =>
+  res.status(400).json({
+    success: false,
+    message: "Validation failed",
+    errors: error.issues.map((issue) => ({
+      field: issue.path.join("."),
+      message: issue.message,
+    })),
+  });
+
 const validate = (schemas) => (req, res, next) => {
   req.validated = req.validated || {};
 
@@ -10,14 +20,7 @@ const validate = (schemas) => (req, res, next) => {
     const result = schema.safeParse(input);
 
     if (!result.success) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed",
-        errors: result.error.issues.map((issue) => ({
-          field: issue.path.join("."),
-          message: issue.message,
-        })),
-      });
+      return sendValidationErrors(res, result.error);
     }
 
     req.validated[part] = result.data;
@@ -27,3 +30,4 @@ const validate = (schemas) => (req, res, next) => {
 };
 
 module.exports = validate;
+module.exports.sendValidationErrors = sendValidationErrors;
