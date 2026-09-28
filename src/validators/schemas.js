@@ -129,6 +129,51 @@ const createNotificationBody = z
     }
   });
 
+const MAX_BULK_NOTIFICATIONS = 100;
+const SHARED_NOTIFICATION_FIELDS = ["channel", "subject", "message", "metadata", "scheduledAt"];
+
+// Bulk send: shared fields apply to every item and an item's own fields override them,
+// so "same message to many recipients" only lists each recipient once. Each merged item
+// is then validated exactly like a single notification.
+const bulkNotificationBody = z
+  .object({
+    ...Object.fromEntries(SHARED_NOTIFICATION_FIELDS.map((field) => [field, z.unknown().optional()])),
+    notifications: z
+      .array(z.record(z.string(), z.unknown()))
+      .min(1, "Provide at least one notification")
+      .max(MAX_BULK_NOTIFICATIONS, `At most ${MAX_BULK_NOTIFICATIONS} notifications per request`),
+  })
+  .transform((body, ctx) => {
+    const shared = Object.fromEntries(
+      SHARED_NOTIFICATION_FIELDS.filter((field) => body[field] !== undefined).map((field) => [
+        field,
+        body[field],
+      ])
+    );
+    const notifications = [];
+    let valid = true;
+
+    body.notifications.forEach((item, index) => {
+      const result = createNotificationBody.safeParse({ ...shared, ...item });
+
+      if (result.success) {
+        notifications.push(result.data);
+        return;
+      }
+
+      valid = false;
+      for (const issue of result.error.issues) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["notifications", index, ...issue.path],
+          message: issue.message,
+        });
+      }
+    });
+
+    return valid ? { notifications } : z.NEVER;
+  });
+
 const listNotificationsQuery = z.object({
   ...pagination,
   search: text(100).optional(),
@@ -169,6 +214,8 @@ module.exports = {
   externalIdParams,
   listRecipientsQuery,
   createNotificationBody,
+  bulkNotificationBody,
+  MAX_BULK_NOTIFICATIONS,
   listNotificationsQuery,
   inboxQuery,
   idParams,

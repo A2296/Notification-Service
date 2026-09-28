@@ -3,7 +3,7 @@ const DeliveryError = require("./deliveryError");
 
 // Works with any SMTP server: Gmail, SendGrid, Mailgun, Brevo, Mailpit (local), etc.
 const createSmtpProvider = (emailConfig) => {
-  const { host, port, secure, user, pass } = emailConfig.smtp;
+  const { host, port, secure, user, pass, timeoutMs = 10000 } = emailConfig.smtp;
 
   if (!host) {
     throw new Error("EMAIL_PROVIDER=smtp requires SMTP_HOST");
@@ -14,6 +14,12 @@ const createSmtpProvider = (emailConfig) => {
     port,
     secure,
     auth: user ? { user, pass } : undefined,
+    // The worker sends one notification at a time, so an unresponsive mail server
+    // must fail fast (and be retried later) instead of stalling the whole queue.
+    // Nodemailer's defaults are 2 minutes to connect and 10 minutes per socket.
+    connectionTimeout: timeoutMs,
+    greetingTimeout: timeoutMs,
+    socketTimeout: timeoutMs * 2,
   });
 
   return {

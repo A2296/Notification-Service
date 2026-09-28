@@ -30,8 +30,18 @@ const businessLimiter = rateLimit({
   message: tooManyRequests,
 });
 
+// Per business, on top of businessLimiter: one bulk request can create up to 100
+// notifications, so bulk requests get their own, much smaller budget.
+const bulkLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: config.rateLimit.bulkMaxPerMinute,
+  keyGenerator: (req) => `bulk:${req.business._id}`,
+  message: tooManyRequests,
+});
+
 module.exports = {
   ipLimiter,
   authLimiter,
   businessLimiter,
+  bulkLimiter,
 };

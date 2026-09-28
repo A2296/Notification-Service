@@ -56,11 +56,18 @@ Set `EMAIL_PROVIDER=smtp` and:
 
 | Provider | SMTP_HOST | SMTP_PORT | SMTP_USER / SMTP_PASS |
 |---|---|---|---|
-| Brevo (free 300/day) | `smtp-relay.brevo.com` | 587 | SMTP login / SMTP key |
-| SendGrid | `smtp.sendgrid.net` | 587 | `apikey` / your API key |
-| Gmail (testing only) | `smtp.gmail.com` | 587 | address / [app password](https://myaccount.google.com/apppasswords) |
+| Brevo (free 300/day) | `smtp-relay.brevo.com` | 2525 | SMTP login / SMTP key |
+| SendGrid | `smtp.sendgrid.net` | 2525 | `apikey` / your API key |
+| Gmail (testing only, paid Render plan) | `smtp.gmail.com` | 587 | address / [app password](https://myaccount.google.com/apppasswords) |
 
-`EMAIL_FROM` must be an address or domain you have verified with the provider.
+`EMAIL_FROM` must be an address or domain you have verified with the provider. Render's free
+plan blocks the standard email ports (25, 465, 587), which is why the table uses 2525; on a paid
+instance any port works. For good inbox placement, send from your own domain and add the SPF and
+DKIM records your provider gives you.
+
+If the mail server is unreachable, each attempt gives up after 10 seconds and is retried later,
+so one slow provider cannot hold up SMS and in-app notifications. Failed notifications show the
+provider's error in the dashboard's Activity page, with a **Retry** button.
 
 ### SMS (Twilio)
 

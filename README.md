@@ -32,13 +32,14 @@ Built with Node.js, Express 5, MongoDB (Mongoose), Nodemailer and Twilio.
 | Channels | `EMAIL` (any SMTP provider), `SMS` (Twilio), `IN_APP` (per-recipient inbox with read tracking) |
 | Delivery | Background worker, automatic retries with exponential backoff, permanent-failure detection, crash recovery, scheduled sends |
 | Tracking | `PENDING → PROCESSING → SENT → DELIVERED / FAILED`, with a timestamped event history per notification |
-| Reliability | `Idempotency-Key` header prevents duplicate sends; manual retry of failed notifications |
+| Reliability | `Idempotency-Key` header prevents duplicate sends; manual retry of failed notifications (API or dashboard) |
+| Bulk sends | Up to 100 notifications per request, shared fields plus per-recipient overrides, per-item results |
 | Recipients | Store your users' contact details once, then send by your own user ID |
 | Validation | Every request is validated with zod and returns field-level error messages |
 | Security | Helmet headers and a strict CSP for the dashboard, CSRF protection, per-IP login rate limit, per-business API rate limit, NoSQL/regex injection protection, bcrypt passwords, audit log |
 | Dashboard | Business web dashboard served by the API at `/` (see below) |
 | Operations | Docker, docker-compose (with a local email inbox), `/health`, graceful shutdown, GitHub Actions CI, Render blueprint |
-| Docs & tests | OpenAPI 3 spec + Swagger UI; 64 integration tests |
+| Docs & tests | OpenAPI 3 spec + Swagger UI; 76 tests |
 
 ---
 
@@ -51,7 +52,9 @@ with no separate hosting or configuration.
 - Business registration and sign-in; sign-out ends the session on the server
 - Overview of total, sent/delivered, in-progress and failed notifications
 - Notification composer for email, SMS and in-app channels (with duplicate-send protection)
+- Bulk mode: paste up to 100 recipients and send the same message to all of them
 - Delivery-activity table with server-side search and status filters
+- Failed notifications show the provider's error and a **Retry** button
 - API key management: generate (secret shown once), list, revoke, plus a ready-to-run `curl` sample
 - Demo mode with sample data when the page is opened without the API (e.g. from a static server)
 - Responsive layout for desktop and mobile devices
@@ -274,6 +277,7 @@ Full request/response details are in **`/docs`**.
 | `POST /api/v1/auth/logout` | JWT | End every session of the user (all their tokens stop working) |
 | `POST/GET /api/v1/api-keys`, `DELETE /api/v1/api-keys/:id` | JWT | Create, list, revoke API keys |
 | `POST /api/v1/notifications` | API key or JWT | Send a notification |
+| `POST /api/v1/notifications/bulk` | API key or JWT | Send up to 100 notifications in one request |
 | `GET /api/v1/notifications` | API key or JWT | List with `search`, `channel`, `status`, `recipientId`, `from`, `to`, `page`, `limit` |
 | `GET /api/v1/notifications/stats` | API key or JWT | Counts by status and channel |
 | `GET /api/v1/notifications/:id` | API key or JWT | Details + status history |
@@ -342,10 +346,11 @@ docker rm -f mongo-test     # when you're done
 If port 27017 is already in use (for example by a local MongoDB), stop that first or point the
 tests elsewhere with `TEST_DB_URL`.
 
-64 integration tests run against a real MongoDB (override with `TEST_DB_URL`), covering auth,
-sessions and logout, JWT tampering, the dashboard CSP, API keys, sending on every channel, retries and failures, scheduling, crash recovery,
-idempotency, tenant isolation, admin controls and webhook signatures. Providers are swapped
-for fakes, so no email or SMS is sent. GitHub Actions runs the tests, `npm audit` and a
+76 tests run against a real MongoDB (override with `TEST_DB_URL`), covering auth,
+sessions and logout, JWT tampering, the dashboard CSP, API keys, sending on every channel,
+bulk sends, retries and failures, scheduling, crash recovery, idempotency, tenant isolation,
+admin controls, rate limits and webhook signatures. Providers are swapped for fakes, so no email
+or SMS is sent; the SMTP provider itself is tested against in-process fake mail servers. GitHub Actions runs the tests, `npm audit` and a
 Docker build on every pull request.
 
 ---
@@ -391,7 +396,7 @@ controllers throw `HttpError(status, message)` instead of using try/catch.
 - Message templates with variables (`Hello {{name}}`)
 - Per-business provider credentials and sender domains
 - Per-key scopes (for example send-only keys) and daily sending quotas per business
-- Bulk sends and user notification preferences / opt-out
+- User notification preferences / opt-out
 - Email open/bounce tracking via provider webhooks
 
 ---

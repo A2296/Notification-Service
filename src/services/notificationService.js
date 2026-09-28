@@ -107,6 +107,44 @@ const createNotification = async ({ businessId, input, idempotencyKey }) => {
   }
 };
 
+const BULK_CONCURRENCY = 10;
+
+// Bulk send: each item is created independently, so one bad recipient does not stop the
+// rest. A request-level Idempotency-Key becomes "<key>:<index>" per item, so repeating
+// the whole request returns the original notifications instead of sending twice.
+const createNotifications = async ({ businessId, inputs, idempotencyKey }) => {
+  const results = [];
+
+  for (let start = 0; start < inputs.length; start += BULK_CONCURRENCY) {
+    const batch = inputs.slice(start, start + BULK_CONCURRENCY);
+    const settled = await Promise.allSettled(
+      batch.map((input, offset) =>
+        createNotification({
+          businessId,
+          input,
+          idempotencyKey: idempotencyKey && `${idempotencyKey}:${start + offset}`,
+        })
+      )
+    );
+
+    settled.forEach((outcome, offset) => {
+      const index = start + offset;
+
+      if (outcome.status === "fulfilled") {
+        const { notification, created } = outcome.value;
+        results.push({ index, created, notification });
+      } else if (outcome.reason instanceof HttpError && outcome.reason.status < 500) {
+        results.push({ index, error: outcome.reason.message });
+      } else {
+        console.error(outcome.reason?.stack || outcome.reason);
+        results.push({ index, error: "Internal error. Retry this notification." });
+      }
+    });
+  }
+
+  return results;
+};
+
 const buildNotificationQuery = (baseQuery, filters) => {
   const query = { ...baseQuery };
 
@@ -249,6 +287,7 @@ const getStats = async (matchQuery) => {
 
 module.exports = {
   createNotification,
+  createNotifications,
   listNotifications,
   getNotification,
   getInbox,
