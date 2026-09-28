@@ -7,6 +7,7 @@ const { businessLimiter } = require("../middleware/rateLimiters");
 
 // Public + dashboard
 router.use("/auth", require("./authRoutes"));
+router.use("/account", require("./accountRoutes"));
 router.use("/api-keys", require("./apiKeyRoutes"));
 
 // Integration API: API key (server-to-server) or dashboard JWT, rate limited per business

@@ -15,6 +15,10 @@ The dashboard is dependency-free: it is built with standard HTML, CSS, and JavaS
 - Failed notifications show the provider's error and a **Retry** button
 - **Send later**: schedule a one-off notification for a date and time
 - **Schedules**: recurring sends (daily, weekly on chosen days, or monthly) at a local time in any timezone, with pause, resume, run now and delete
+- **Profile** (top-right account button): who is signed in, their business, member since, last sign-in and two-factor status
+- **Settings**: business details, password change, two-factor authentication (QR code, recovery codes), sign out everywhere, delivery channel status, API base URL and documentation, limits
+- Two-step sign-in when two-factor authentication is on
+- Collapsible sidebar; the choice is remembered in this browser
 - API key management: generate (the secret is shown once), list, and revoke keys
 - Ready-to-run `curl` example using your key ID and the service's real URL
 - Demo mode with sample data when the page is opened without the API
@@ -71,6 +75,10 @@ All paths are relative to the page's own origin. The full reference is at `/docs
 | Send in bulk | `POST /api/v1/notifications/bulk` (with an `Idempotency-Key` header) |
 | Retry a failed notification | `POST /api/v1/notifications/:id/retry` |
 | Recurring schedules | `GET/POST /api/v1/schedules`, `PATCH/DELETE /api/v1/schedules/:id`, `POST /api/v1/schedules/:id/run` |
+| Two-factor sign-in | `POST /api/v1/auth/login/mfa` |
+| Profile and password | `PATCH /api/v1/account`, `POST /api/v1/account/password` |
+| Two-factor setup | `POST /api/v1/account/mfa/setup`, `/mfa/enable`, `/mfa/disable` |
+| Business and settings | `PATCH /api/v1/account/business`, `GET /api/v1/account/settings` |
 | List API keys | `GET /api/v1/api-keys` |
 | Create API key | `POST /api/v1/api-keys` |
 | Revoke API key | `DELETE /api/v1/api-keys/:id` |
@@ -102,7 +110,7 @@ Register a business:
 
 ## Security Notes
 
-- The session token is stored by the browser in an HttpOnly, `SameSite=Strict` cookie. `app.js` never sees it, and nothing sensitive is written to `localStorage` or `sessionStorage`.
+- The session token is stored by the browser in an HttpOnly, `SameSite=Strict` cookie. `app.js` never sees it. The only thing written to `localStorage` is the sidebar display preference; nothing sensitive is stored in the browser.
 - Every request goes to the page's own origin, so the dashboard cannot be pointed at another server. Each request also sends `X-Requested-With: XMLHttpRequest`, which the API requires for cookie-authenticated changes (CSRF protection), and times out after 15 seconds.
 - The API serves the page with a strict Content-Security-Policy: scripts and styles only from this origin (plus Google Fonts), no inline code, and no framing.
 - All data from the API is rendered with `textContent`, never as HTML.

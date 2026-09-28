@@ -5,10 +5,11 @@ const router = express.Router();
 const validate = require("../middleware/validate");
 const authMiddleware = require("../middleware/authMiddleware");
 const { authLimiter } = require("../middleware/rateLimiters");
-const { registerBody, loginBody } = require("../validators/schemas");
+const { registerBody, loginBody, mfaLoginBody } = require("../validators/schemas");
 const {
   registerBusiness,
   loginUser,
+  loginWithMfa,
   getMe,
   logoutUser,
 } = require("../controllers/authController");
@@ -16,6 +17,8 @@ const {
 router.post("/register", authLimiter, validate({ body: registerBody }), registerBusiness);
 
 router.post("/login", authLimiter, validate({ body: loginBody }), loginUser);
+
+router.post("/login/mfa", authLimiter, validate({ body: mfaLoginBody }), loginWithMfa);
 
 router.get("/me", authMiddleware, getMe);
 

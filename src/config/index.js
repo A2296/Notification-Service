@@ -10,6 +10,16 @@ const config = {
     algorithm: "HS256",
     issuer: "notification-service",
     audience: "notification-service-dashboard",
+    // Short-lived token between the password and the 2FA code; never accepted as a session
+    mfaAudience: "notification-service-mfa",
+    mfaExpiresIn: "5m",
+  },
+
+  mfa: {
+    // Shown in authenticator apps next to the account
+    issuer: process.env.MFA_ISSUER || "NotifyFlow",
+    maxFailedAttempts: 5,
+    lockMinutes: 15,
   },
 
   schedules: {

@@ -27,7 +27,7 @@ Built with Node.js, Express 5, MongoDB (Mongoose), Nodemailer and Twilio.
 | Area | What's included |
 |---|---|
 | Multi-tenancy | Business accounts; every record is scoped to its business and isolation is tested |
-| Authentication | API key + secret for integrations (secret hashed, shown once, revocable, up to 10 active per business); dashboard sessions in an HttpOnly cookie (JWT bearer for scripts and Swagger) with server-side logout |
+| Authentication | API key + secret for integrations (secret hashed, shown once, revocable, up to 10 active per business); dashboard sessions in an HttpOnly cookie (JWT bearer for scripts and Swagger) with server-side logout; optional two-factor authentication (authenticator app + recovery codes) |
 | Authorization | Business users vs. platform `ADMIN`; suspending a business blocks its keys and logins at once |
 | Channels | `EMAIL` (any SMTP provider), `SMS` (Twilio), `IN_APP` (per-recipient inbox with read tracking) |
 | Delivery | Background worker, automatic retries with exponential backoff, permanent-failure detection, crash recovery, scheduled sends |
@@ -40,7 +40,8 @@ Built with Node.js, Express 5, MongoDB (Mongoose), Nodemailer and Twilio.
 | Security | Helmet headers and a strict CSP for the dashboard, CSRF protection, per-IP login rate limit, per-business API rate limit, NoSQL/regex injection protection, bcrypt passwords, audit log |
 | Dashboard | Business web dashboard served by the API at `/` (see below) |
 | Operations | Docker, docker-compose (with a local email inbox), `/health`, graceful shutdown, GitHub Actions CI, Render blueprint |
-| Docs & tests | OpenAPI 3 spec + Swagger UI; 94 tests |
+| Accounts | Profile, business details, password change (signs out other devices), two-factor authentication, delivery and limits overview |
+| Docs & tests | OpenAPI 3 spec + Swagger UI; 111 tests |
 
 ---
 
@@ -58,6 +59,9 @@ with no separate hosting or configuration.
 - Failed notifications show the provider's error and a **Retry** button
 - **Send later**: pick a date and time in the composer
 - **Schedules** page: recurring sends (every day, chosen weekdays or a day of the month) with pause, resume, run now and delete
+- **Profile** (top-right account button): name, email, role, business, member since, last sign-in, two-factor status and sign-out
+- **Settings**: business details, password change, two-factor authentication with recovery codes, sign out everywhere, delivery channel status, API base URL, API documentation and your limits
+- Collapsible sidebar (icon rail on desktop; your choice is remembered in this browser)
 - API key management: generate (secret shown once), list, revoke, plus a ready-to-run `curl` sample
 - Demo mode with sample data when the page is opened without the API (e.g. from a static server)
 - Responsive layout for desktop and mobile devices
@@ -276,8 +280,12 @@ Full request/response details are in **`/docs`**.
 |---|---|---|
 | `POST /api/v1/auth/register` | none | Register a business + first user |
 | `POST /api/v1/auth/login` | none | Dashboard login: sets the session cookie and returns a JWT |
+| `POST /api/v1/auth/login/mfa` | none | Second sign-in step when two-factor is on (`mfaToken` + code) |
 | `GET /api/v1/auth/me` | JWT | Current user and business |
 | `POST /api/v1/auth/logout` | JWT | End every session of the user (all their tokens stop working) |
+| `PATCH /api/v1/account`, `POST /api/v1/account/password` | JWT | Update your name, change your password |
+| `POST /api/v1/account/mfa/setup`, `/enable`, `/disable` | JWT | Turn two-factor authentication on or off |
+| `PATCH /api/v1/account/business`, `GET /api/v1/account/settings` | JWT | Business details; delivery channels and limits |
 | `POST/GET /api/v1/api-keys`, `DELETE /api/v1/api-keys/:id` | JWT | Create, list, revoke API keys |
 | `POST /api/v1/notifications` | API key or JWT | Send a notification |
 | `POST /api/v1/notifications/bulk` | API key or JWT | Send up to 100 notifications in one request |
@@ -387,7 +395,12 @@ unverified number). Fix the setting, then click **Retry** on that notification.
 - Dashboard sessions use an HttpOnly, `SameSite=Strict` cookie (`Secure` in production), so scripts
   cannot read the token; cookie-authenticated changes also require the `X-Requested-With` header.
 - JWTs are only accepted with HS256 and the expected issuer and audience. Logout increments a
-  per-user token version, so every previously issued token stops working immediately.
+  per-user token version, so every previously issued token stops working immediately; so does a
+  password change (except on the device that made it).
+- Optional two-factor authentication (TOTP, RFC 6238) with 10 one-time recovery codes. Secrets are
+  encrypted with AES-256-GCM (`MFA_ENCRYPTION_KEY`), recovery codes are stored hashed, each code works
+  once, and 5 wrong codes lock the code step for 15 minutes. The password step alone never creates a
+  session: it returns a 5-minute token that is only accepted by `POST /auth/login/mfa`.
 - A business can hold at most 10 active API keys (`MAX_ACTIVE_API_KEYS`).
 - The dashboard is same-origin and runs under a strict Content-Security-Policy (no inline scripts
   or styles, no framing); it renders all API data as text, never as HTML.
@@ -417,8 +430,8 @@ docker rm -f mongo-test     # when you're done
 If port 27017 is already in use (for example by a local MongoDB), stop that first or point the
 tests elsewhere with `TEST_DB_URL`.
 
-94 tests run against a real MongoDB (override with `TEST_DB_URL`), covering auth,
-sessions and logout, JWT tampering, the dashboard CSP, API keys, sending on every channel,
+111 tests run against a real MongoDB (override with `TEST_DB_URL`), covering auth,
+sessions and logout, two-factor authentication (RFC 6238 test vectors, replay, lockout), JWT tampering, the dashboard CSP, API keys, sending on every channel,
 bulk sends, recurring schedules (timezones, daylight saving, crash safety), retries and failures,
 scheduling, crash recovery, idempotency, tenant isolation,
 admin controls, rate limits and webhook signatures. Providers are swapped for fakes, so no email
@@ -443,9 +456,10 @@ Docker build on every pull request.
 │   ├── services/
 │   │   ├── notificationService.js   Create (single and bulk), list, inbox, retry, stats
 │   │   ├── scheduleService.js       Runs due recurring schedules
+│   │   ├── mfaService.js            Two-factor setup, codes, recovery codes, lockout
 │   │   ├── deliveryWorker.js        Queue processing, retries, backoff, due schedules
 │   │   └── providers/               console, smtp, twilio, in-app
-│   └── utils/                  API keys, session cookie, audit log, recurrence rules, HttpError
+│   └── utils/                  API keys, session cookie, audit log, recurrence rules, two-factor codes, encryption, HttpError
 ├── scripts/createAdmin.js      Create a platform admin
 ├── docs/                       openapi.yaml, DEPLOYMENT.md
 ├── test/                       Integration tests (node:test + supertest)

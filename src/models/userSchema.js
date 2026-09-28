@@ -40,6 +40,27 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+    lastLoginAt: {
+      type: Date,
+      default: null,
+    },
+
+    // Two-factor authentication with an authenticator app (TOTP).
+    // Secrets are encrypted (utils/secretBox); recovery codes are stored as SHA-256 hashes.
+    mfa: {
+      enabled: { type: Boolean, default: false },
+      secret: { type: String, default: null },
+      // Set during setup, until the user confirms a first code
+      pendingSecret: { type: String, default: null },
+      // Last time step used, so a code cannot be used twice
+      lastUsedStep: { type: Number, default: -1 },
+      recoveryCodes: { type: [String], default: [] },
+      enabledAt: { type: Date, default: null },
+      // Brute-force protection for the code step of sign-in
+      failedAttempts: { type: Number, default: 0 },
+      lockedUntil: { type: Date, default: null },
+    },
   },
   {
     timestamps: true,

@@ -44,6 +44,45 @@ const loginBody = z.object({
   password: z.string().min(1).max(128),
 });
 
+// A 6-digit authenticator code or a recovery code ("3f9a1-c07b2")
+const mfaCode = z.string().trim().min(6).max(20);
+const currentPassword = z.string().min(1, "Enter your current password").max(128);
+
+const mfaLoginBody = z.object({
+  mfaToken: z.string().min(1).max(2000),
+  code: mfaCode,
+});
+
+// ---- Account (the signed-in user) ----
+const updateProfileBody = z.object({
+  name: text(100),
+});
+
+const changePasswordBody = z
+  .object({
+    currentPassword,
+    newPassword: z.string().min(8, "Password must be at least 8 characters").max(128),
+  })
+  .refine((body) => body.currentPassword !== body.newPassword, {
+    path: ["newPassword"],
+    message: "Choose a password you have not used here before",
+  });
+
+const confirmPasswordBody = z.object({ password: currentPassword });
+
+const mfaConfirmBody = z.object({ code: mfaCode });
+
+const mfaDisableBody = z.object({ password: currentPassword, code: mfaCode });
+
+const businessSettingsBody = z
+  .object({
+    name: text(100).optional(),
+    email: email.optional(),
+  })
+  .refine((body) => body.name !== undefined || body.email !== undefined, {
+    message: "Provide a name or email to update",
+  });
+
 // ---- API keys ----
 const createApiKeyBody = z.object({
   name: text(100).default("Default key"),
@@ -328,6 +367,13 @@ const adminNotificationsQuery = listNotificationsQuery.extend({
 module.exports = {
   registerBody,
   loginBody,
+  mfaLoginBody,
+  updateProfileBody,
+  changePasswordBody,
+  confirmPasswordBody,
+  mfaConfirmBody,
+  mfaDisableBody,
+  businessSettingsBody,
   createApiKeyBody,
   createRecipientBody,
   updateRecipientBody,

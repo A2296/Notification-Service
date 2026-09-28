@@ -193,8 +193,14 @@ test("the dashboard script parses, keeps no credentials in browser storage and n
 
   assert.doesNotThrow(() => new vm.Script(source), "app.js has a syntax error");
 
-  const storage = source.match(/localStorage|sessionStorage|indexedDB|document\.cookie/);
+  const storage = source.match(/sessionStorage|indexedDB|document\.cookie/);
   assert.equal(storage, null, "app.js must not keep credentials in browser storage");
+
+  // localStorage holds one display preference (sidebar collapsed), under one key
+  const localStorageUses = source.match(/localStorage/g) || [];
+  const preferenceUses = source.match(/localStorage\.(getItem|setItem)\(PREFERENCES_KEY\b/g) || [];
+  assert.equal(localStorageUses.length, preferenceUses.length, "localStorage is only for display preferences");
+  assert.match(source, /const PREFERENCES_KEY = 'notifyflow-preferences';/);
 
   const html = source.match(/innerHTML|outerHTML|insertAdjacentHTML|document\.write/);
   assert.equal(html, null, "app.js must build the DOM with textContent, not HTML strings");
