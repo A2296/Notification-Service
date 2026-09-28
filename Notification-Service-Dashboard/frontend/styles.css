@@ -355,6 +355,17 @@ td strong {
   background:#eef1f2;
   color:#5d6b73
 }
+.retry-button {
+  margin-left:8px
+}
+.failure-reason {
+  display:block;
+  max-width:260px;
+  margin-top:6px;
+  color:#a8392f;
+  font-size:11px;
+  line-height:1.4
+}
 .send-form {
   max-width:810px
 }
@@ -364,9 +375,20 @@ td strong {
   gap:10px;
   margin-bottom:25px
 }
+.channel-picker label {
+  position:relative
+}
+/* Visually hidden but still focusable; without a size it inherits width:100% and widens the page */
 .channel-picker input {
   position:absolute;
-  opacity:0
+  opacity:0;
+  width:1px;
+  height:1px;
+  margin:0
+}
+.channel-picker input:focus-visible+span {
+  outline:2px solid var(--teal);
+  outline-offset:2px
 }
 .channel-picker span {
   border:1px solid var(--line);
@@ -385,6 +407,11 @@ td strong {
 }
 .channel-picker b {
   font-size:12px
+}
+.mode-picker {
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  max-width:420px;
+  margin-bottom:14px
 }
 .form-grid {
   display:grid;

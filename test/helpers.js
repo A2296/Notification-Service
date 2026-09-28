@@ -5,6 +5,7 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || "test-secret";
 process.env.AUTH_RATE_LIMIT_MAX = process.env.AUTH_RATE_LIMIT_MAX || "1000";
 process.env.RATE_LIMIT_MAX = process.env.RATE_LIMIT_MAX || "1000";
 process.env.IP_RATE_LIMIT_MAX = process.env.IP_RATE_LIMIT_MAX || "10000";
+process.env.BULK_RATE_LIMIT_MAX = process.env.BULK_RATE_LIMIT_MAX || "1000";
 
 const path = require("node:path");
 const mongoose = require("mongoose");

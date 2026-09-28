@@ -24,6 +24,8 @@ const config = {
     authMax: Number(process.env.AUTH_RATE_LIMIT_MAX) || 20,
     // per business (API key or dashboard user) per minute on the rest of the API
     apiMaxPerMinute: Number(process.env.RATE_LIMIT_MAX) || 300,
+    // per business per minute on POST /notifications/bulk (up to 100 notifications each)
+    bulkMaxPerMinute: Number(process.env.BULK_RATE_LIMIT_MAX) || 10,
   },
 
   worker: {

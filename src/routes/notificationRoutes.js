@@ -3,13 +3,16 @@ const express = require("express");
 const router = express.Router();
 
 const validate = require("../middleware/validate");
+const { bulkLimiter } = require("../middleware/rateLimiters");
 const {
   createNotificationBody,
+  bulkNotificationBody,
   listNotificationsQuery,
   idParams,
 } = require("../validators/schemas");
 const {
   createNotification,
+  createBulkNotifications,
   listNotifications,
   getNotificationById,
   markAsRead,
@@ -20,6 +23,13 @@ const {
 // Mounted behind businessAuth (API key or dashboard JWT)
 
 router.post("/", validate({ body: createNotificationBody }), createNotification);
+
+router.post(
+  "/bulk",
+  bulkLimiter,
+  validate({ body: bulkNotificationBody }),
+  createBulkNotifications
+);
 
 router.get("/", validate({ query: listNotificationsQuery }), listNotifications);
 

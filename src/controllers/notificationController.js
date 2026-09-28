@@ -3,17 +3,29 @@ const { z } = require("zod");
 
 const idempotencyKeySchema = z.string().trim().min(1).max(255);
 
-const createNotification = async (req, res) => {
+// Returns { idempotencyKey } (possibly undefined), or null after sending a 400
+const readIdempotencyKey = (req, res) => {
   const header = req.get("idempotency-key");
   const idempotencyKey =
     header === undefined ? undefined : idempotencyKeySchema.safeParse(header).data;
 
   if (header !== undefined && !idempotencyKey) {
-    return res.status(400).json({
+    res.status(400).json({
       success: false,
       message: "Idempotency-Key must be 1-255 characters",
     });
+    return null;
   }
+
+  return { idempotencyKey };
+};
+
+const createNotification = async (req, res) => {
+  const header = readIdempotencyKey(req, res);
+  if (!header) {
+    return;
+  }
+  const { idempotencyKey } = header;
 
   const { notification, created } = await notificationService.createNotification({
     businessId: req.business._id,
@@ -28,6 +40,35 @@ const createNotification = async (req, res) => {
       ? "Notification accepted for delivery"
       : "Duplicate request: returning the original notification",
     notification,
+  });
+};
+
+// Up to 100 notifications in one request. Items that cannot be created (for example a
+// stored recipient with no address for the channel) are reported without failing the rest.
+const createBulkNotifications = async (req, res) => {
+  const header = readIdempotencyKey(req, res);
+  if (!header) {
+    return;
+  }
+
+  const results = await notificationService.createNotifications({
+    businessId: req.business._id,
+    inputs: req.validated.body.notifications,
+    idempotencyKey: header.idempotencyKey,
+  });
+
+  const accepted = results.filter((result) => result.notification).length;
+  const failed = results.length - accepted;
+
+  res.status(accepted > 0 ? 202 : 422).json({
+    success: accepted > 0,
+    message:
+      failed === 0
+        ? `${accepted} notifications accepted for delivery`
+        : `${accepted} accepted, ${failed} could not be created`,
+    accepted,
+    failed,
+    results,
   });
 };
 
@@ -91,6 +132,7 @@ const getStats = async (req, res) => {
 
 module.exports = {
   createNotification,
+  createBulkNotifications,
   listNotifications,
   getNotificationById,
   markAsRead,

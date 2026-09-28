@@ -9,8 +9,10 @@ The dashboard is dependency-free: it is built with standard HTML, CSS, and JavaS
 - Business registration and sign-in; sign-out ends the session on the server
 - Overview of total, sent/delivered, in-progress, and failed notifications
 - Notification composer for email, SMS, and in-app channels, with per-channel validation
+- Bulk mode: send one message to up to 100 recipients at once, with per-recipient results
 - Duplicate-send protection: a retried send reuses its `Idempotency-Key`
 - Delivery-activity table with server-side search and status filters
+- Failed notifications show the provider's error and a **Retry** button
 - API key management: generate (the secret is shown once), list, and revoke keys
 - Ready-to-run `curl` example using your key ID and the service's real URL
 - Demo mode with sample data when the page is opened without the API
@@ -64,6 +66,8 @@ All paths are relative to the page's own origin. The full reference is at `/docs
 | Overview counts | `GET /api/v1/notifications/stats` |
 | Activity | `GET /api/v1/notifications?limit=50&search=…&status=…` |
 | Send notification | `POST /api/v1/notifications` (with an `Idempotency-Key` header) |
+| Send in bulk | `POST /api/v1/notifications/bulk` (with an `Idempotency-Key` header) |
+| Retry a failed notification | `POST /api/v1/notifications/:id/retry` |
 | List API keys | `GET /api/v1/api-keys` |
 | Create API key | `POST /api/v1/api-keys` |
 | Revoke API key | `DELETE /api/v1/api-keys/:id` |

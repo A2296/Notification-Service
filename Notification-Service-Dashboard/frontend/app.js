@@ -17,7 +17,9 @@ const CHANNELS = {
     recipientField: 'email',
     recipientLabel: 'Recipient email',
     inputType: 'email',
-    placeholder: 'name@example.com'
+    placeholder: 'name@example.com',
+    bulkLabel: 'Recipient emails',
+    bulkPlaceholder: 'ada@example.com\ngrace@example.com'
   },
   sms: {
     api: 'SMS',
@@ -26,7 +28,9 @@ const CHANNELS = {
     recipientField: 'phone',
     recipientLabel: 'Recipient phone',
     inputType: 'tel',
-    placeholder: '+2348012345678 (international format)'
+    placeholder: '+2348012345678 (international format)',
+    bulkLabel: 'Recipient phone numbers',
+    bulkPlaceholder: '+2348012345678\n+447700900123'
   },
   'in-app': {
     api: 'IN_APP',
@@ -35,7 +39,9 @@ const CHANNELS = {
     recipientField: 'id',
     recipientLabel: 'Recipient user ID',
     inputType: 'text',
-    placeholder: 'Your user ID, e.g. user_2481'
+    placeholder: 'Your user ID, e.g. user_2481',
+    bulkLabel: 'Recipient user IDs',
+    bulkPlaceholder: 'user_2481\nuser_2482'
   }
 };
 
@@ -62,9 +68,10 @@ const el = (selector) => document.querySelector(selector);
 // ---- API client ----
 
 class ApiError extends Error {
-  constructor(message, status) {
+  constructor(message, status, data = {}) {
     super(message);
     this.status = status;
+    this.data = data;
   }
 }
 
@@ -113,7 +120,7 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new ApiError(describeError(data, response.status), response.status);
+      throw new ApiError(describeError(data, response.status), response.status, data);
     }
 
     return data;
@@ -298,6 +305,7 @@ function sampleNotifications() {
       channel: 'EMAIL',
       to: 'leo@northstar.io',
       status: 'FAILED',
+      failureReason: '550 5.1.1 Recipient mailbox unavailable',
       createdAt: minutesAgo(65)
     },
     {
@@ -368,6 +376,7 @@ function toDisplay(item) {
     channel: CHANNELS[channel] ? channel : 'in-app',
     recipient: item.to || '—',
     status: STATUSES.has(status) ? status : 'pending',
+    failureReason: item.failureReason || '',
     createdAt: item.createdAt
   };
 }
@@ -394,6 +403,26 @@ function notificationRow(item) {
   status.append(
     createElement('span', { className: `status ${view.status}`, text: view.status })
   );
+
+  if (view.status === 'failed') {
+    const retry = createElement('button', {
+      className: 'secondary-button compact-button retry-button',
+      text: 'Retry'
+    });
+    retry.type = 'button';
+    retry.setAttribute('aria-label', `Retry ${view.title}`);
+    retry.addEventListener('click', () => retryNotification(item, retry));
+    status.append(retry);
+
+    if (view.failureReason) {
+      const reason = createElement('span', {
+        className: 'failure-reason',
+        text: excerpt(view.failureReason, 90)
+      });
+      reason.title = view.failureReason;
+      status.append(reason);
+    }
+  }
 
   row.append(
     summary,
@@ -805,18 +834,38 @@ async function submitAuth(event) {
 
 // ---- Send notification ----
 
+const MAX_BULK_RECIPIENTS = 100;
+
 function selectedChannel() {
   const value = el('#notificationForm').elements.channel.value;
   return CHANNELS[value] ? value : 'email';
 }
 
-function updateChannelFields() {
+function isBulkMode() {
+  return el('#notificationForm').elements.mode.value === 'bulk';
+}
+
+function updateSendForm() {
   const channel = selectedChannel();
   const settings = CHANNELS[channel];
+  const bulk = isBulkMode();
+
+  document
+    .querySelectorAll('.single-only')
+    .forEach((field) => field.classList.toggle('hidden', bulk));
+  document
+    .querySelectorAll('.bulk-only')
+    .forEach((field) => field.classList.toggle('hidden', !bulk));
 
   el('#recipientLabel').textContent = settings.recipientLabel;
+  el('#recipientsLabel').textContent = settings.bulkLabel;
+
+  const recipients = el('#recipientsInput');
+  recipients.required = bulk;
+  recipients.placeholder = settings.bulkPlaceholder;
 
   const recipient = el('#recipientInput');
+  recipient.required = !bulk;
   recipient.type = settings.inputType;
   recipient.placeholder = settings.placeholder;
 
@@ -837,16 +886,29 @@ function updateChannelFields() {
     channel === 'sms'
       ? 'SMS messages are limited to 1,600 characters. Carrier fees may apply.'
       : 'Up to 5,000 characters.';
+
+  setButtonLabel(el('#sendButton'), bulk ? 'Send to all' : 'Send notification');
 }
 
-function buildNotification(form) {
+// "a@x.com, b@x.com\nc@x.com" -> ["a@x.com", "b@x.com", "c@x.com"], without duplicates
+function parseRecipients(text) {
+  return [
+    ...new Set(
+      text
+        .split(/[\n,;]+/)
+        .map((value) => value.trim())
+        .filter(Boolean)
+    )
+  ];
+}
+
+// Everything except the recipient, shared by single and bulk sends
+function buildMessage(form) {
   const values = Object.fromEntries(new FormData(form).entries());
-  const settings = CHANNELS[selectedChannel()];
   const text = (name) => String(values[name] || '').trim();
 
   const body = {
-    channel: settings.api,
-    recipient: { [settings.recipientField]: text('recipient') },
+    channel: CHANNELS[selectedChannel()].api,
     message: text('message')
   };
 
@@ -861,10 +923,86 @@ function buildNotification(form) {
   return body;
 }
 
+const recipientFor = (value) => ({ [CHANNELS[selectedChannel()].recipientField]: value });
+
+// [{ recipient, message }] -> "Invalid email address: bob@, carl@ (+2 more)"
+function summarizeFailures(failures) {
+  const byMessage = new Map();
+
+  for (const { recipient, message } of failures) {
+    byMessage.set(message, [...(byMessage.get(message) || []), recipient]);
+  }
+
+  return [...byMessage]
+    .map(([message, list]) => {
+      const more = list.length > 3 ? ` (+${list.length - 3} more)` : '';
+      return `${message}: ${list.slice(0, 3).join(', ')}${more}`;
+    })
+    .join('; ');
+}
+
+// Validation errors name the item ("notifications.3.recipient.email"); show the recipient instead
+function describeBulkError(error, recipients) {
+  const failures = (error.data?.errors || [])
+    .map((item) => {
+      const match = /^notifications\.(\d+)/.exec(item.field || '');
+      return match && { recipient: recipients[Number(match[1])], message: item.message };
+    })
+    .filter(Boolean);
+
+  return failures.length ? summarizeFailures(failures) : error.message;
+}
+
 function resetSendForm(form) {
+  const mode = form.elements.mode.value;
+
   form.reset();
-  form.elements.channel.value = 'email';
-  updateChannelFields();
+  form.elements.mode.value = mode;
+  updateSendForm();
+}
+
+async function sendSingle(message, recipient) {
+  const { notification } = await callApi('/notifications', {
+    method: 'POST',
+    body: { ...message, recipient: recipientFor(recipient) },
+    headers: { 'Idempotency-Key': state.idempotencyKey }
+  });
+
+  return { text: `Notification ${notification.id} queued for delivery.`, failed: [] };
+}
+
+async function sendBulk(message, recipients) {
+  let result;
+
+  try {
+    result = await callApi('/notifications/bulk', {
+      method: 'POST',
+      body: {
+        ...message,
+        notifications: recipients.map((value) => ({ recipient: recipientFor(value) }))
+      },
+      headers: { 'Idempotency-Key': state.idempotencyKey }
+    });
+  } catch (error) {
+    // 422: none could be created, but the response still says why for each recipient
+    if (!error.data?.results) {
+      throw error;
+    }
+    result = error.data;
+  }
+
+  const failures = result.results
+    .filter((item) => item.error)
+    .map((item) => ({ recipient: recipients[item.index], message: item.error }));
+
+  if (failures.length === 0) {
+    return { text: `${result.accepted} notifications queued for delivery.`, failed: [] };
+  }
+
+  return {
+    text: `${result.accepted} queued, ${failures.length} not sent. ${summarizeFailures(failures)}. Those recipients are left in the list so you can fix them and send again.`,
+    failed: failures.map((failure) => failure.recipient)
+  };
 }
 
 async function sendNotification(event) {
@@ -873,21 +1011,37 @@ async function sendNotification(event) {
   const form = event.currentTarget;
   const output = el('#formMessage');
   const button = el('#sendButton');
-  const body = buildNotification(form);
+  const bulk = isBulkMode();
+  const message = buildMessage(form);
+  const recipients = bulk
+    ? parseRecipients(el('#recipientsInput').value)
+    : [el('#recipientInput').value.trim()];
+
+  if (recipients.length === 0) {
+    output.textContent = 'Add at least one recipient.';
+    return;
+  }
+
+  if (recipients.length > MAX_BULK_RECIPIENTS) {
+    output.textContent = `A bulk send is limited to ${MAX_BULK_RECIPIENTS} recipients and the list has ${recipients.length}. Split it into smaller batches.`;
+    return;
+  }
 
   if (state.mode === 'demo') {
-    state.demo.unshift({
-      id: `ntf_${randomId().slice(0, 6)}`,
-      subject: body.subject,
-      message: body.message,
-      channel: body.channel,
-      to: Object.values(body.recipient)[0],
-      status: 'PENDING',
-      createdAt: new Date().toISOString()
-    });
+    for (const to of recipients) {
+      state.demo.unshift({
+        id: `ntf_${randomId().slice(0, 6)}`,
+        subject: message.subject,
+        message: message.message,
+        channel: message.channel,
+        to,
+        status: 'PENDING',
+        createdAt: new Date().toISOString()
+      });
+    }
 
     resetSendForm(form);
-    output.textContent = 'Demo notification added. Open the dashboard from your Notification Service to send it for real.';
+    output.textContent = `${recipients.length === 1 ? 'Demo notification' : `${recipients.length} demo notifications`} added. Open the dashboard from your Notification Service to send for real.`;
     refreshDashboard();
     return;
   }
@@ -901,23 +1055,50 @@ async function sendNotification(event) {
   // Reused if this same send is retried (e.g. after a timeout), so it is never delivered twice
   state.idempotencyKey = state.idempotencyKey || randomId();
 
-  output.textContent = 'Sending…';
+  output.textContent = bulk ? `Sending to ${recipients.length} recipients…` : 'Sending…';
   setBusy(button, true);
 
   try {
-    const { notification } = await callApi('/notifications', {
-      method: 'POST',
-      body,
-      headers: { 'Idempotency-Key': state.idempotencyKey }
-    });
+    const { text, failed } = bulk
+      ? await sendBulk(message, recipients)
+      : await sendSingle(message, recipients[0]);
 
     state.idempotencyKey = null;
-    resetSendForm(form);
-    output.textContent = `Notification ${notification.id} queued for delivery.`;
+
+    if (failed.length === 0) {
+      resetSendForm(form);
+    } else {
+      el('#recipientsInput').value = failed.join('\n');
+    }
+
+    output.textContent = text;
     refreshDashboard();
   } catch (error) {
-    output.textContent = `Unable to send: ${error.message}`;
+    output.textContent = `Unable to send: ${bulk ? describeBulkError(error, recipients) : error.message}`;
   } finally {
+    setBusy(button, false);
+  }
+}
+
+// ---- Retry ----
+
+async function retryNotification(item, button) {
+  if (state.mode === 'demo') {
+    item.status = 'PENDING';
+    item.failureReason = null;
+    showToast('Demo notification queued for retry.');
+    refreshView();
+    return;
+  }
+
+  setBusy(button, true);
+
+  try {
+    await callApi(`/notifications/${encodeURIComponent(item.id)}/retry`, { method: 'POST' });
+    showToast('Notification queued for retry.');
+    refreshView();
+  } catch (error) {
+    showToast(`Could not retry: ${error.message}`);
     setBusy(button, false);
   }
 }
@@ -1029,8 +1210,12 @@ const notificationForm = el('#notificationForm');
 
 notificationForm.addEventListener('submit', sendNotification);
 notificationForm.addEventListener('change', (event) => {
-  if (event.target.name === 'channel') {
-    updateChannelFields();
+  if (event.target.name === 'mode') {
+    el('#formMessage').textContent = '';
+  }
+
+  if (event.target.name === 'channel' || event.target.name === 'mode') {
+    updateSendForm();
   }
 });
 // Edited content is a new notification, so it gets a new Idempotency-Key
@@ -1069,7 +1254,7 @@ el('#revokeKey').addEventListener('click', () => revokeKey());
 // ---- Start ----
 
 async function init() {
-  updateChannelFields();
+  updateSendForm();
   renderApiKeys();
   setView(location.hash.slice(1));
 

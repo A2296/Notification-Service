@@ -67,14 +67,19 @@
         <section class="view" id="send">
           <div class="section-heading"><div><p class="eyebrow">COMPOSER</p><h2>Send a notification</h2><p class="subtle">Messages are queued for delivery on the selected channel and recorded in activity.</p></div></div>
           <form class="content-card send-form" id="notificationForm">
+            <div class="channel-picker mode-picker" aria-label="Number of recipients">
+              <label><input type="radio" name="mode" value="single" checked /><span>◉<b>One recipient</b></span></label>
+              <label><input type="radio" name="mode" value="bulk" /><span>☰<b>Bulk (up to 100)</b></span></label>
+            </div>
             <div class="channel-picker" aria-label="Select a notification channel">
               <label><input type="radio" name="channel" value="email" checked /><span>✉<b>Email</b></span></label>
               <label><input type="radio" name="channel" value="sms" /><span>◌<b>SMS</b></span></label>
               <label><input type="radio" name="channel" value="in-app" /><span>▣<b>In-app</b></span></label>
             </div>
             <div class="form-grid">
-              <label><span id="recipientLabel">Recipient email</span> <input id="recipientInput" name="recipient" type="email" required maxlength="254" autocomplete="off" placeholder="name@example.com" /></label>
+              <label class="single-only"><span id="recipientLabel">Recipient email</span> <input id="recipientInput" name="recipient" type="email" required maxlength="254" autocomplete="off" placeholder="name@example.com" /></label>
               <label>Reference ID <input name="referenceId" type="text" maxlength="100" placeholder="Optional order or user ID" /></label>
+              <label class="full-width bulk-only hidden"><span id="recipientsLabel">Recipient emails</span> <textarea id="recipientsInput" name="recipients" rows="5" maxlength="30000" autocomplete="off"></textarea><small id="recipientsHint">One per line, or separated by commas. Up to 100; duplicates are skipped.</small></label>
               <label class="full-width subject-field"><span>Subject <small id="subjectHint">(required for email)</small></span> <input id="subjectInput" name="subject" type="text" required maxlength="200" placeholder="Your notification subject" /></label>
               <label class="full-width">Message <textarea id="messageInput" name="message" required rows="7" maxlength="5000" placeholder="Write your message…"></textarea><small id="messageHint">Up to 5,000 characters.</small></label>
             </div>
