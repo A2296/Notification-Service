@@ -51,6 +51,8 @@ const TITLES = {
   send: 'Create a notification',
   activity: 'Notification activity',
   schedules: 'Recurring schedules',
+  profile: 'Your profile',
+  settings: 'Settings',
   credentials: 'API credentials'
 };
 
@@ -61,6 +63,11 @@ const state = {
   demo: [],
   apiKeys: [],
   schedules: [],
+  settings: null,
+  // Between the password and the two-factor code; kept in memory only
+  mfaToken: null,
+  // Which part of the two-factor setup is showing (null = based on the account)
+  mfaStep: null,
   idempotencyKey: null,
   activityRequest: 0
 };
@@ -502,11 +509,18 @@ function apiKeyRow(key) {
   return row;
 }
 
+function apiOrigin() {
+  if (state.settings?.publicBaseUrl) {
+    return state.settings.publicBaseUrl;
+  }
+
+  return location.protocol === 'file:'
+    ? 'https://your-notification-service.example.com'
+    : location.origin;
+}
+
 function renderCodeSnippet(key = activeKey()) {
-  const origin =
-    location.protocol === 'file:'
-      ? 'https://your-notification-service.example.com'
-      : location.origin;
+  const origin = apiOrigin();
 
   el('#codeSnippet').textContent = [
     `curl -X POST "${origin}/api/v1/notifications" \\`,
@@ -655,6 +669,14 @@ function refreshView(view = state.view) {
     return loadSchedules();
   }
 
+  if (view === 'profile') {
+    return loadProfile();
+  }
+
+  if (view === 'settings') {
+    return loadSettings();
+  }
+
   return refreshDashboard();
 }
 
@@ -686,7 +708,7 @@ function setSignedIn(user) {
 
   const account = el('#accountButton');
   account.textContent = user.email;
-  account.title = 'Sign out';
+  account.title = 'Your profile';
 
   setConnection(user.business ? 'API connected' : 'Admin account', true);
 
@@ -701,6 +723,8 @@ function setSignedOut() {
   state.user = null;
   state.apiKeys = [];
   state.schedules = [];
+  state.settings = null;
+  state.mfaStep = null;
 
   const account = el('#accountButton');
   account.textContent = 'Sign in';
@@ -713,6 +737,8 @@ function setSignedOut() {
   renderTable('#recentActivity', '#emptyRecent', [], notificationRow);
   renderTable('#activityRows', '#emptyActivity', [], notificationRow);
   renderSchedules();
+  renderProfile();
+  renderSettings();
   el('#pageTitle').textContent =
     state.view === 'dashboard' ? greeting() : TITLES[state.view];
 }
@@ -749,20 +775,43 @@ let registrationMode = false;
 const authDialog = el('#authDialog');
 
 function updateAuthForm() {
-  el('#authTitle').textContent = registrationMode
-    ? 'Create your business account'
-    : 'Sign in to your workspace';
+  const codeStep = Boolean(state.mfaToken);
+  const register = registrationMode && !codeStep;
 
-  el('#authDescription').textContent = registrationMode
-    ? 'Register your business, then create credentials for your applications.'
-    : 'Use your business account to securely manage notifications and API credentials.';
+  el('#authTitle').textContent = codeStep
+    ? 'Two-factor authentication'
+    : register
+      ? 'Create your business account'
+      : 'Sign in to your workspace';
+
+  el('#authDescription').textContent = codeStep
+    ? 'Enter the 6-digit code from your authenticator app, or one of your recovery codes.'
+    : register
+      ? 'Register your business, then create credentials for your applications.'
+      : 'Use your business account to securely manage notifications and API credentials.';
 
   document
     .querySelectorAll('.register-only')
-    .forEach((field) => field.classList.toggle('hidden', !registrationMode));
+    .forEach((field) => field.classList.toggle('hidden', !register));
+  document
+    .querySelectorAll('.password-step')
+    .forEach((field) => field.classList.toggle('hidden', codeStep));
+  document
+    .querySelectorAll('.code-step')
+    .forEach((field) => field.classList.toggle('hidden', !codeStep));
 
-  el('#businessName').required = registrationMode;
-  el('#authName').required = registrationMode;
+  el('#businessName').required = register;
+  el('#authName').required = register;
+  el('#authEmail').required = !codeStep;
+  el('#authPassword').required = !codeStep;
+  el('#authCode').required = codeStep;
+
+  if (codeStep) {
+    setButtonLabel(el('#authSubmit'), 'Verify');
+    el('#toggleAuth').textContent = 'Use a different account';
+    el('#authMessage').textContent = '';
+    return;
+  }
 
   const password = el('#authPassword');
   password.autocomplete = registrationMode ? 'new-password' : 'current-password';
@@ -803,6 +852,11 @@ async function submitAuth(event) {
     return;
   }
 
+  if (state.mfaToken) {
+    await submitAuthCode(message, submit);
+    return;
+  }
+
   const body = {
     email: el('#authEmail').value.trim(),
     password: el('#authPassword').value
@@ -818,27 +872,72 @@ async function submitAuth(event) {
 
   try {
     // The session cookie is set by the server; the token in the body is not kept
-    const { user } = await request(
+    const data = await request(
       `${API_BASE}${registrationMode ? '/auth/register' : '/auth/login'}`,
       { method: 'POST', body }
     );
+
+    el('#authPassword').value = '';
+
+    // Password accepted, but two-factor is on: ask for the code next
+    if (data.mfaRequired) {
+      state.mfaToken = data.mfaToken;
+      updateAuthForm();
+      el('#authCode').focus();
+      return;
+    }
 
     showToast(
       registrationMode
         ? 'Account created. Generate an API key to start integrating.'
         : 'Signed in successfully.'
     );
-
-    // The account exists now, so any later prompt should be a sign-in
-    registrationMode = false;
-    el('#authPassword').value = '';
-    authDialog.close();
-    setSignedIn(user);
+    finishSignIn(data.user);
   } catch (error) {
     message.textContent = error.message;
   } finally {
     setBusy(submit, false);
   }
+}
+
+async function submitAuthCode(message, submit) {
+  message.textContent = 'Checking code…';
+  setBusy(submit, true);
+
+  try {
+    const { user } = await request(`${API_BASE}/auth/login/mfa`, {
+      method: 'POST',
+      body: { mfaToken: state.mfaToken, code: el('#authCode').value.trim() }
+    });
+
+    showToast(
+      user.recoveryCodesLeft <= 3
+        ? `Signed in. Only ${user.recoveryCodesLeft} recovery codes left: turn two-factor off and on again in Settings for new ones.`
+        : 'Signed in successfully.'
+    );
+    finishSignIn(user);
+  } catch (error) {
+    el('#authCode').value = '';
+
+    // The in-between token lasts 5 minutes; after that, start again with the password
+    if (error.status === 401 && /expired/i.test(error.message)) {
+      state.mfaToken = null;
+      updateAuthForm();
+    }
+
+    message.textContent = error.message;
+  } finally {
+    setBusy(submit, false);
+  }
+}
+
+function finishSignIn(user) {
+  // The account exists now, so any later prompt should be a sign-in
+  registrationMode = false;
+  state.mfaToken = null;
+  el('#authCode').value = '';
+  authDialog.close();
+  setSignedIn(user);
 }
 
 // ---- Send notification ----
@@ -979,23 +1078,27 @@ const FIELD_LABELS = {
   'repeat.time': 'Time',
   'repeat.timezone': 'Timezone',
   'repeat.daysOfWeek': 'Days',
-  'repeat.dayOfMonth': 'Day of month'
+  'repeat.dayOfMonth': 'Day of month',
+  email: 'Email',
+  currentPassword: 'Current password',
+  newPassword: 'New password'
 };
 
 // Validation errors name the item ("notifications.3.recipient.email" or "recipients.3.email");
 // show the recipient the user typed instead
-function describeItemErrors(error, recipients, listField) {
-  const itemPattern = new RegExp(`^${listField}\\.(\\d+)`);
+function describeItemErrors(error, recipients = [], listField = null) {
+  const itemPattern = listField && new RegExp(`^${listField}\\.(\\d+)`);
   const failures = [];
   const other = [];
 
   for (const item of error.data?.errors || []) {
-    const match = itemPattern.exec(item.field || '');
+    const match = itemPattern && itemPattern.exec(item.field || '');
 
     if (match) {
       failures.push({ recipient: recipients[Number(match[1])], message: item.message });
     } else {
-      other.push(`${FIELD_LABELS[item.field] || item.field}: ${item.message}`);
+      const label = FIELD_LABELS[item.field] || item.field;
+      other.push(label ? `${label}: ${item.message}` : item.message);
     }
   }
 
@@ -1508,6 +1611,447 @@ async function deleteSchedule(schedule, button) {
   }
 }
 
+// ---- Profile and settings ----
+
+const DEMO_USER = {
+  name: 'Ada Lovelace',
+  email: 'ada@acme.com',
+  role: 'USER',
+  business: { name: 'Acme', email: 'hello@acme.com' },
+  mfaEnabled: false,
+  recoveryCodesLeft: 0,
+  createdAt: minutesAgo(60 * 24 * 90),
+  lastLoginAt: minutesAgo(3)
+};
+
+const DEMO_SETTINGS = {
+  delivery: {
+    email: { live: false, provider: 'console', from: 'no-reply@example.com' },
+    sms: { live: false, provider: 'console', deliveryReports: false },
+    inApp: { live: true }
+  },
+  limits: {
+    requestsPerMinute: 300,
+    bulkRequestsPerMinute: 10,
+    notificationsPerBulkRequest: 100,
+    activeApiKeys: 10,
+    schedules: 20,
+    sessionLifetime: '1d'
+  },
+  publicBaseUrl: null
+};
+
+const profileUser = () => state.user || (state.mode === 'demo' ? DEMO_USER : null);
+const currentSettings = () => state.settings || (state.mode === 'demo' ? DEMO_SETTINGS : null);
+
+const formatDay = (value) =>
+  new Date(value).toLocaleDateString([], { year: 'numeric', month: 'long', day: 'numeric' });
+
+// "1d" -> "1 day", "12h" -> "12 hours"
+function describeLifetime(value) {
+  const match = /^(\d+)\s*([dhm])$/.exec(String(value));
+
+  if (!match) {
+    return String(value);
+  }
+
+  const unit = { d: 'day', h: 'hour', m: 'minute' }[match[2]];
+  return `${match[1]} ${unit}${match[1] === '1' ? '' : 's'}`;
+}
+
+// Settings forms change the real account; the demo and signed-out states only explain why not
+function canChangeAccount(output) {
+  if (state.mode === 'demo') {
+    output.textContent = 'This is a demo. Open the dashboard from your Notification Service to make changes.';
+    return false;
+  }
+
+  if (!state.user) {
+    output.textContent = 'Sign in first.';
+    openAuthDialog();
+    return false;
+  }
+
+  return true;
+}
+
+function renderProfile() {
+  const user = profileUser();
+  const initials = user
+    ? user.name
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0].toUpperCase())
+        .join('')
+    : '';
+
+  el('#profileAvatar').textContent = initials || '?';
+  el('#profileName').textContent = user ? user.name : 'Not signed in';
+  el('#profileEmail').textContent = user ? user.email : 'Sign in to see your profile.';
+  el('#profileRole').textContent = user
+    ? user.role === 'ADMIN'
+      ? 'Platform administrator'
+      : 'Business owner'
+    : '—';
+  el('#profileBusiness').textContent = user?.business?.name || '—';
+  el('#profileSince').textContent = user?.createdAt ? formatDay(user.createdAt) : '—';
+  el('#profileLastLogin').textContent = user?.lastLoginAt ? formatWhen(user.lastLoginAt) : '—';
+  el('#profileMfa').textContent = user
+    ? user.mfaEnabled
+      ? `On · ${user.recoveryCodesLeft} recovery codes left`
+      : 'Off'
+    : '—';
+  el('#profileNameInput').value = user?.name || '';
+  el('#profileEmailInput').value = user?.email || '';
+  el('#profileSignOut').disabled = !state.user;
+}
+
+// Refreshes the account (e.g. last sign-in, recovery codes left) before showing it
+async function loadProfile() {
+  renderProfile();
+
+  if (state.mode !== 'live' || !state.user) {
+    return;
+  }
+
+  try {
+    const { user } = await callApi('/auth/me');
+    state.user = user;
+    renderProfile();
+  } catch (error) {
+    showToast(`Could not load your profile: ${error.message}`);
+  }
+}
+
+async function saveProfile(event) {
+  event.preventDefault();
+
+  const output = el('#profileOutput');
+
+  if (!canChangeAccount(output)) {
+    return;
+  }
+
+  try {
+    const { user } = await callApi('/account', {
+      method: 'PATCH',
+      body: { name: el('#profileNameInput').value.trim() }
+    });
+    state.user = user;
+    renderProfile();
+    output.textContent = 'Saved.';
+  } catch (error) {
+    output.textContent = describeItemErrors(error);
+  }
+}
+
+function statusItem(label, note, live, liveText, offText) {
+  const item = document.createElement('li');
+  const text = document.createElement('span');
+
+  text.append(
+    createElement('strong', { text: label }),
+    createElement('span', { className: 'row-note', text: note })
+  );
+  item.append(
+    text,
+    createElement('span', { className: `status ${live ? 'active' : 'paused'}`, text: live ? liveText : offText })
+  );
+
+  return item;
+}
+
+function renderDelivery(settings) {
+  const list = el('#deliveryList');
+
+  if (!settings) {
+    list.replaceChildren(createElement('li', { className: 'subtle', text: 'Sign in to see delivery settings.' }));
+    return;
+  }
+
+  const { email, sms } = settings.delivery;
+  let smsNote = 'Not connected to Twilio yet';
+
+  if (sms.live) {
+    smsNote = sms.deliveryReports
+      ? 'Sent through Twilio, with delivery reports'
+      : 'Sent through Twilio (delivery reports need PUBLIC_BASE_URL)';
+  }
+
+  list.replaceChildren(
+    statusItem(
+      'Email',
+      email.live ? `Sent through SMTP from ${email.from}` : 'Not connected to an email provider yet',
+      email.live,
+      'live',
+      'logged only'
+    ),
+    statusItem('SMS', smsNote, sms.live, 'live', 'logged only'),
+    statusItem('In-app', "Stored in each recipient's inbox", true, 'live', '')
+  );
+}
+
+function renderLimits(settings) {
+  const list = el('#limitsList');
+
+  if (!settings) {
+    list.replaceChildren(createElement('li', { className: 'subtle', text: 'Sign in to see your limits.' }));
+    return;
+  }
+
+  const { limits } = settings;
+  const rows = [
+    ['API requests', `${limits.requestsPerMinute} per minute`],
+    ['Bulk sends', `${limits.bulkRequestsPerMinute} per minute, ${limits.notificationsPerBulkRequest} notifications each`],
+    ['Active API keys', String(limits.activeApiKeys)],
+    ['Recurring schedules', String(limits.schedules)],
+    ['Session length', describeLifetime(limits.sessionLifetime)]
+  ];
+
+  list.replaceChildren(
+    ...rows.map(([label, value]) => {
+      const item = document.createElement('li');
+      item.append(createElement('span', { text: label }), createElement('strong', { text: value }));
+      return item;
+    })
+  );
+  el('#sessionLifetime').textContent = describeLifetime(limits.sessionLifetime);
+}
+
+function renderMfa() {
+  const user = profileUser();
+  const enabled = Boolean(user?.mfaEnabled);
+  const status = el('#mfaStatus');
+
+  status.textContent = enabled ? 'on' : 'off';
+  status.className = `status ${enabled ? 'active' : 'paused'}`;
+  el('#mfaStatusNote').textContent = enabled ? `${user.recoveryCodesLeft} recovery codes left` : '';
+
+  const step = state.mfaStep || (enabled ? 'disable' : 'start');
+  const steps = {
+    start: '#mfaStartForm',
+    confirm: '#mfaConfirmForm',
+    recovery: '#mfaRecovery',
+    disable: '#mfaDisableForm'
+  };
+
+  for (const [name, selector] of Object.entries(steps)) {
+    el(selector).classList.toggle('hidden', name !== step);
+  }
+}
+
+function renderSettings() {
+  const settings = currentSettings();
+  const business = profileUser()?.business;
+
+  el('#businessNameInput').value = business?.name || '';
+  el('#businessEmailInput').value = business?.email || '';
+  el('#apiBaseUrl').textContent = `${apiOrigin()}/api/v1`;
+
+  renderMfa();
+  renderDelivery(settings);
+  renderLimits(settings);
+}
+
+async function loadSettings() {
+  renderSettings();
+
+  if (state.mode !== 'live' || !state.user) {
+    return;
+  }
+
+  try {
+    const { settings } = await callApi('/account/settings');
+    state.settings = settings;
+    renderSettings();
+  } catch (error) {
+    showToast(`Could not load settings: ${error.message}`);
+  }
+}
+
+async function saveBusiness(event) {
+  event.preventDefault();
+
+  const output = el('#businessOutput');
+
+  if (!canChangeAccount(output)) {
+    return;
+  }
+
+  try {
+    const { business } = await callApi('/account/business', {
+      method: 'PATCH',
+      body: {
+        name: el('#businessNameInput').value.trim(),
+        email: el('#businessEmailInput').value.trim()
+      }
+    });
+    state.user = { ...state.user, business };
+    renderSettings();
+    renderProfile();
+    output.textContent = 'Saved. New emails use this name as the sender.';
+  } catch (error) {
+    output.textContent = describeItemErrors(error);
+  }
+}
+
+async function changePassword(event) {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  const output = el('#passwordOutput');
+
+  if (!canChangeAccount(output)) {
+    return;
+  }
+
+  if (el('#newPassword').value !== el('#confirmPassword').value) {
+    output.textContent = 'The new passwords do not match.';
+    return;
+  }
+
+  try {
+    // The server signs out other devices and gives this browser a fresh session
+    const { user } = await callApi('/account/password', {
+      method: 'POST',
+      body: {
+        currentPassword: el('#currentPassword').value,
+        newPassword: el('#newPassword').value
+      }
+    });
+    state.user = user;
+    form.reset();
+    output.textContent = 'Password changed. Other devices have been signed out.';
+  } catch (error) {
+    output.textContent = describeItemErrors(error);
+  }
+}
+
+async function startMfaSetup(event) {
+  event.preventDefault();
+
+  const output = el('#mfaStartOutput');
+
+  if (!canChangeAccount(output)) {
+    return;
+  }
+
+  try {
+    const setup = await callApi('/account/mfa/setup', {
+      method: 'POST',
+      body: { password: el('#mfaStartPassword').value }
+    });
+
+    el('#mfaStartPassword').value = '';
+    output.textContent = '';
+    el('#mfaQr').src = setup.qrCode;
+    el('#mfaSecret').textContent = setup.secret.match(/.{1,4}/g).join(' ');
+    state.mfaStep = 'confirm';
+    renderMfa();
+    el('#mfaConfirmCode').focus();
+  } catch (error) {
+    output.textContent = error.message;
+  }
+}
+
+async function confirmMfaSetup(event) {
+  event.preventDefault();
+
+  const output = el('#mfaConfirmOutput');
+
+  try {
+    const { recoveryCodes, user } = await callApi('/account/mfa/enable', {
+      method: 'POST',
+      body: { code: el('#mfaConfirmCode').value.trim() }
+    });
+
+    state.user = user;
+    el('#mfaConfirmCode').value = '';
+    el('#mfaQr').removeAttribute('src');
+    el('#mfaSecret').textContent = '';
+    output.textContent = '';
+    el('#recoveryCodes').replaceChildren(
+      ...recoveryCodes.map((code) => createElement('li', { text: code }))
+    );
+    state.mfaStep = 'recovery';
+    renderMfa();
+    renderProfile();
+  } catch (error) {
+    output.textContent = error.message;
+  }
+}
+
+function finishRecoveryCodes() {
+  el('#recoveryCodes').replaceChildren();
+  state.mfaStep = null;
+  renderMfa();
+  showToast('Two-factor authentication is on.');
+}
+
+async function disableMfa(event) {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  const output = el('#mfaDisableOutput');
+
+  if (!canChangeAccount(output)) {
+    return;
+  }
+
+  try {
+    const { user } = await callApi('/account/mfa/disable', {
+      method: 'POST',
+      body: {
+        password: el('#mfaDisablePassword').value,
+        code: el('#mfaDisableCode').value.trim()
+      }
+    });
+
+    state.user = user;
+    form.reset();
+    output.textContent = '';
+    state.mfaStep = null;
+    renderMfa();
+    renderProfile();
+    showToast('Two-factor authentication is off.');
+  } catch (error) {
+    output.textContent = error.message;
+  }
+}
+
+// ---- Sidebar ----
+
+// A display preference for this browser only; never credentials or account data
+const PREFERENCES_KEY = 'notifyflow-preferences';
+
+function readPreferences() {
+  try {
+    return JSON.parse(localStorage.getItem(PREFERENCES_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function savePreferences(changes) {
+  try {
+    localStorage.setItem(PREFERENCES_KEY, JSON.stringify({ ...readPreferences(), ...changes }));
+  } catch {
+    // Storage unavailable (e.g. private browsing): the choice just is not remembered
+  }
+}
+
+function setSidebarCollapsed(collapsed) {
+  const toggle = el('#sidebarToggle');
+  const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+
+  el('.app-shell').classList.toggle('sidebar-collapsed', collapsed);
+  toggle.textContent = collapsed ? '»' : '«';
+  toggle.setAttribute('aria-expanded', String(!collapsed));
+  toggle.setAttribute('aria-label', label);
+  toggle.title = label;
+}
+
 // ---- API keys ----
 
 async function generateKey() {
@@ -1597,7 +2141,7 @@ el('#menuButton').addEventListener('click', () =>
 
 el('#accountButton').addEventListener('click', () => {
   if (state.user) {
-    signOut();
+    setView('profile');
   } else {
     openAuthDialog();
   }
@@ -1641,8 +2185,17 @@ authDialog.addEventListener('click', (event) => {
   }
 });
 el('#toggleAuth').addEventListener('click', () => {
-  registrationMode = !registrationMode;
+  if (state.mfaToken) {
+    state.mfaToken = null;
+  } else {
+    registrationMode = !registrationMode;
+  }
   updateAuthForm();
+});
+// Closing the dialog abandons a half-finished two-factor sign-in
+authDialog.addEventListener('close', () => {
+  state.mfaToken = null;
+  el('#authCode').value = '';
 });
 
 el('#copyKey').addEventListener('click', () => {
@@ -1661,9 +2214,41 @@ el('#copySnippet').addEventListener('click', () =>
 el('#generateKey').addEventListener('click', generateKey);
 el('#revokeKey').addEventListener('click', () => revokeKey());
 
+el('#sidebarToggle').addEventListener('click', () => {
+  const collapsed = !el('.app-shell').classList.contains('sidebar-collapsed');
+  setSidebarCollapsed(collapsed);
+  savePreferences({ sidebarCollapsed: collapsed });
+});
+
+el('#profileForm').addEventListener('submit', saveProfile);
+el('#profileSignOut').addEventListener('click', signOut);
+el('#businessForm').addEventListener('submit', saveBusiness);
+el('#passwordForm').addEventListener('submit', changePassword);
+el('#mfaStartForm').addEventListener('submit', startMfaSetup);
+el('#mfaConfirmForm').addEventListener('submit', confirmMfaSetup);
+el('#mfaDisableForm').addEventListener('submit', disableMfa);
+el('#recoveryDone').addEventListener('click', finishRecoveryCodes);
+el('#copyRecoveryCodes').addEventListener('click', () =>
+  copyText(
+    [...document.querySelectorAll('#recoveryCodes li')].map((item) => item.textContent).join('\n'),
+    'Recovery codes copied.'
+  )
+);
+el('#signOutEverywhere').addEventListener('click', () => {
+  if (state.user) {
+    signOut();
+  } else {
+    openAuthDialog();
+  }
+});
+el('#copyBaseUrl').addEventListener('click', () =>
+  copyText(el('#apiBaseUrl').textContent, 'API base URL copied.')
+);
+
 // ---- Start ----
 
 async function init() {
+  setSidebarCollapsed(Boolean(readPreferences().sidebarCollapsed));
   updateSendForm();
   setupTimezones();
   updateScheduleForm();

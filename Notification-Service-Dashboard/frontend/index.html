@@ -15,20 +15,24 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar" aria-label="Main navigation">
-        <a class="brand" href="#dashboard" aria-label="NotifyFlow dashboard">
-          <span class="brand-mark">N</span><span>notify<span>flow</span></span>
-        </a>
+      <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+        <div class="sidebar-top">
+          <a class="brand" href="#dashboard" aria-label="NotifyFlow dashboard">
+            <span class="brand-mark">N</span><span class="brand-name">notify<span>flow</span></span>
+          </a>
+          <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-controls="sidebar" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar">«</button>
+        </div>
         <nav class="nav-list">
-          <a class="nav-link active" href="#dashboard" data-view="dashboard"><span>▦</span> Overview</a>
-          <a class="nav-link" href="#send" data-view="send"><span>✦</span> Send notification</a>
-          <a class="nav-link" href="#activity" data-view="activity"><span>◷</span> Activity</a>
-          <a class="nav-link" href="#schedules" data-view="schedules"><span>⟳</span> Schedules</a>
-          <a class="nav-link" href="#credentials" data-view="credentials"><span>⌘</span> API credentials</a>
+          <a class="nav-link active" href="#dashboard" data-view="dashboard" title="Overview"><span class="nav-icon">▦</span><span class="nav-label">Overview</span></a>
+          <a class="nav-link" href="#send" data-view="send" title="Send notification"><span class="nav-icon">✦</span><span class="nav-label">Send notification</span></a>
+          <a class="nav-link" href="#activity" data-view="activity" title="Activity"><span class="nav-icon">◷</span><span class="nav-label">Activity</span></a>
+          <a class="nav-link" href="#schedules" data-view="schedules" title="Schedules"><span class="nav-icon">⟳</span><span class="nav-label">Schedules</span></a>
+          <a class="nav-link" href="#credentials" data-view="credentials" title="API credentials"><span class="nav-icon">⌘</span><span class="nav-label">API credentials</span></a>
         </nav>
         <div class="sidebar-footer">
-          <a class="nav-link" href="/docs" target="_blank" rel="noopener noreferrer"><span>⚙</span> API documentation</a>
-          <p>Notification infrastructure<br />for product teams.</p>
+          <a class="nav-link" href="#profile" data-view="profile" title="Profile"><span class="nav-icon">◉</span><span class="nav-label">Profile</span></a>
+          <a class="nav-link" href="#settings" data-view="settings" title="Settings"><span class="nav-icon">⚙</span><span class="nav-label">Settings</span></a>
+          <p class="sidebar-note">Notification infrastructure<br />for product teams.</p>
         </div>
       </aside>
 
@@ -127,6 +131,95 @@
           </section>
         </section>
 
+        <section class="view" id="profile">
+          <div class="section-heading"><div><p class="eyebrow">ACCOUNT</p><h2>Your profile</h2><p class="subtle">The account you are signed in with.</p></div></div>
+          <div class="settings-grid">
+            <section class="content-card profile-card">
+              <div class="profile-header"><span class="avatar" id="profileAvatar" aria-hidden="true">?</span><div><h3 id="profileName">Not signed in</h3><p class="subtle" id="profileEmail">Sign in to see your profile.</p></div></div>
+              <dl class="detail-list">
+                <div><dt>Role</dt><dd id="profileRole">—</dd></div>
+                <div><dt>Business</dt><dd id="profileBusiness">—</dd></div>
+                <div><dt>Member since</dt><dd id="profileSince">—</dd></div>
+                <div><dt>Last sign-in</dt><dd id="profileLastLogin">—</dd></div>
+                <div><dt>Two-factor authentication</dt><dd id="profileMfa">—</dd></div>
+              </dl>
+              <div class="key-actions"><button class="secondary-button" type="button" data-go-to="settings">Security settings</button><button class="danger-button" id="profileSignOut" type="button">Sign out</button></div>
+            </section>
+            <form class="content-card settings-form" id="profileForm">
+              <p class="eyebrow">EDIT PROFILE</p><h3>Your details</h3>
+              <label>Full name <input id="profileNameInput" type="text" required maxlength="100" autocomplete="name" /></label>
+              <label>Email <input id="profileEmailInput" type="email" disabled /><small>Your sign-in email cannot be changed here yet.</small></label>
+              <div class="form-actions"><output id="profileOutput"></output><button class="primary-button" type="submit">Save profile</button></div>
+            </form>
+          </div>
+        </section>
+
+        <section class="view" id="settings">
+          <div class="section-heading"><div><p class="eyebrow">WORKSPACE</p><h2>Settings</h2><p class="subtle">Your business details, account security, delivery channels and developer tools.</p></div></div>
+          <div class="settings-grid">
+            <form class="content-card settings-form" id="businessForm">
+              <p class="eyebrow">BUSINESS</p><h3>Business details</h3>
+              <label>Business name <input id="businessNameInput" type="text" required maxlength="100" autocomplete="organization" /><small>Shown as the sender name on your emails.</small></label>
+              <label>Contact email <input id="businessEmailInput" type="email" required maxlength="254" /></label>
+              <div class="form-actions"><output id="businessOutput"></output><button class="primary-button" type="submit">Save details</button></div>
+            </form>
+
+            <form class="content-card settings-form" id="passwordForm">
+              <p class="eyebrow">SECURITY</p><h3>Change password</h3>
+              <label>Current password <input id="currentPassword" type="password" required maxlength="128" autocomplete="current-password" /></label>
+              <label>New password <input id="newPassword" type="password" required minlength="8" maxlength="128" autocomplete="new-password" /></label>
+              <label>Confirm new password <input id="confirmPassword" type="password" required minlength="8" maxlength="128" autocomplete="new-password" /></label>
+              <div class="form-actions"><output id="passwordOutput"></output><button class="primary-button" type="submit">Change password</button></div>
+            </form>
+
+            <section class="content-card settings-form" id="mfaCard">
+              <p class="eyebrow">SECURITY</p><h3>Two-factor authentication</h3>
+              <p class="subtle">Ask for a code from an authenticator app (Google Authenticator, Microsoft Authenticator, Authy…) when signing in, in addition to your password.</p>
+              <p class="setting-status"><span class="status paused" id="mfaStatus">off</span> <span id="mfaStatusNote"></span></p>
+              <form id="mfaStartForm" class="mfa-step">
+                <label>Confirm your password to turn it on <input id="mfaStartPassword" type="password" required maxlength="128" autocomplete="current-password" /></label>
+                <div class="form-actions"><output id="mfaStartOutput"></output><button class="primary-button" type="submit">Turn on two-factor</button></div>
+              </form>
+              <form id="mfaConfirmForm" class="mfa-step hidden">
+                <p class="subtle">1. Scan this QR code with your authenticator app, or enter the key by hand.</p>
+                <div class="qr-box"><img id="mfaQr" alt="QR code for your authenticator app" width="180" height="180" /><code id="mfaSecret"></code></div>
+                <label>2. Enter the 6-digit code the app shows <input id="mfaConfirmCode" type="text" inputmode="numeric" pattern="[0-9]{6}" required maxlength="6" autocomplete="one-time-code" /></label>
+                <div class="form-actions"><output id="mfaConfirmOutput"></output><button class="primary-button" type="submit">Confirm and turn on</button></div>
+              </form>
+              <div id="mfaRecovery" class="mfa-step hidden" role="status">
+                <p class="subtle"><strong>Save these recovery codes now.</strong> Each one lets you sign in once if you lose your phone. They are not shown again.</p>
+                <ol class="recovery-codes" id="recoveryCodes"></ol>
+                <div class="key-actions"><button class="secondary-button" id="copyRecoveryCodes" type="button">Copy codes</button><button class="primary-button" id="recoveryDone" type="button">I have saved them</button></div>
+              </div>
+              <form id="mfaDisableForm" class="mfa-step hidden">
+                <label>Password <input id="mfaDisablePassword" type="password" required maxlength="128" autocomplete="current-password" /></label>
+                <label>Authenticator or recovery code <input id="mfaDisableCode" type="text" required maxlength="20" autocomplete="one-time-code" /></label>
+                <div class="form-actions"><output id="mfaDisableOutput"></output><button class="danger-button" type="submit">Turn off two-factor</button></div>
+              </form>
+            </section>
+
+            <section class="content-card settings-form">
+              <p class="eyebrow">SECURITY</p><h3>Sessions</h3>
+              <p class="subtle">Signing out ends your session on every device and browser, including API tokens issued to you. Sessions otherwise last <span id="sessionLifetime">1 day</span>.</p>
+              <div class="form-actions"><span></span><button class="danger-button" id="signOutEverywhere" type="button">Sign out everywhere</button></div>
+            </section>
+
+            <section class="content-card settings-form">
+              <p class="eyebrow">DELIVERY</p><h3>Delivery channels</h3>
+              <p class="subtle">Set by whoever runs this Notification Service. Channels that are not live only log messages.</p>
+              <ul class="status-list" id="deliveryList"><li class="subtle">Sign in to see delivery settings.</li></ul>
+            </section>
+
+            <section class="content-card settings-form">
+              <p class="eyebrow">DEVELOPERS</p><h3>API access</h3>
+              <label>API base URL <span class="key-value"><code id="apiBaseUrl">—</code><button class="icon-button" id="copyBaseUrl" type="button" aria-label="Copy API base URL">⧉</button></span></label>
+              <div class="key-actions"><a class="secondary-button" href="/docs" target="_blank" rel="noopener noreferrer">API documentation</a><a class="secondary-button" href="/openapi.json" target="_blank" rel="noopener noreferrer">OpenAPI spec</a><button class="secondary-button" type="button" data-go-to="credentials">API keys</button></div>
+              <p class="eyebrow limits-title">YOUR LIMITS</p>
+              <ul class="status-list" id="limitsList"><li class="subtle">Sign in to see your limits.</li></ul>
+            </section>
+          </div>
+        </section>
+
         <section class="view" id="credentials">
           <div class="section-heading"><div><p class="eyebrow">DEVELOPER SETTINGS</p><h2>API credentials</h2><p class="subtle">Use these credentials only on your server. Never place a secret in browser or mobile application code.</p></div></div>
           <div class="credentials-layout">
@@ -160,8 +253,9 @@
         <p class="subtle" id="authDescription">Use your business account to securely manage notifications and API credentials.</p>
         <label class="register-only hidden">Business name<input id="businessName" type="text" maxlength="100" autocomplete="organization" placeholder="Acme Inc." /></label>
         <label class="register-only hidden">Your name<input id="authName" type="text" maxlength="100" autocomplete="name" placeholder="Ada Lovelace" /></label>
-        <label>Work email<input id="authEmail" type="email" required maxlength="254" autocomplete="email" placeholder="you@company.com" /></label>
-        <label>Password<input id="authPassword" type="password" required maxlength="128" autocomplete="current-password" placeholder="Enter your password" /></label>
+        <label class="password-step">Work email<input id="authEmail" type="email" required maxlength="254" autocomplete="email" placeholder="you@company.com" /></label>
+        <label class="password-step">Password<input id="authPassword" type="password" required maxlength="128" autocomplete="current-password" placeholder="Enter your password" /></label>
+        <label class="code-step hidden">Authentication code<input id="authCode" type="text" inputmode="numeric" maxlength="20" autocomplete="one-time-code" placeholder="6-digit code or a recovery code" /></label>
         <output class="form-error" id="authMessage"></output>
         <div class="dialog-actions auth-actions"><button class="text-button" type="button" id="toggleAuth">Create an account</button><button class="primary-button" type="submit" value="default" id="authSubmit">Sign in <span>→</span></button></div>
       </form>

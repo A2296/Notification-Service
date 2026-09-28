@@ -98,6 +98,9 @@ curl $URL/health
 - **HTTPS:** always serve the service over HTTPS (Render does this automatically). Behind a proxy,
   keep `TRUST_PROXY=1` so the app sees the original scheme and client IP. With `NODE_ENV=production`
   (set in the Dockerfile) the dashboard session cookie is `Secure`, so it is never sent over plain HTTP.
+- **Two-factor secrets:** set `MFA_ENCRYPTION_KEY` to its own long random value (the Render
+  blueprint generates one). Without it, `JWT_SECRET` is used, and rotating `JWT_SECRET` would then
+  stop users' authenticator codes from working; they could still sign in with a recovery code.
 - **Secrets:** never commit `.env`. Rotate `JWT_SECRET` to log out all dashboard users;
   a user can end all of their own sessions with **Sign out** (`POST /api/v1/auth/logout`).
   Businesses rotate their own API keys by creating a new key and revoking the old one.

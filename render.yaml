@@ -14,6 +14,8 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
+      - key: MFA_ENCRYPTION_KEY
+        generateValue: true
       # e.g. https://notification-service.onrender.com (needed for Twilio delivery callbacks)
       - key: PUBLIC_BASE_URL
         sync: false

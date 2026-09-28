@@ -28,6 +28,8 @@ servers:
 tags:
   - name: Auth
     description: Business registration and dashboard login
+  - name: Account
+    description: The signed-in user - profile, password, two-factor authentication, business details
   - name: API Keys
     description: Manage integration credentials (dashboard token only)
   - name: Notifications
@@ -341,7 +343,12 @@ paths:
     post:
       tags: [Auth]
       summary: Log in to the dashboard
-      description: Returns a JWT and also sets it as the HttpOnly `ns_session` cookie.
+      description: |
+        Returns a JWT and also sets it as the HttpOnly `ns_session` cookie.
+
+        If two-factor authentication is on, returns `{ "mfaRequired": true, "mfaToken": "..." }`
+        instead, with no session. Send the token and a code to `POST /api/v1/auth/login/mfa`
+        within 5 minutes.
       security: []
       requestBody:
         required: true
@@ -362,6 +369,171 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/auth/login/mfa:
+    post:
+      tags: [Auth]
+      summary: Finish signing in with a two-factor code
+      description: |
+        Second step when two-factor authentication is on. `code` is the 6-digit code from the
+        authenticator app, or one of the recovery codes. Each code works once; after 5 wrong codes
+        the account's code step is locked for 15 minutes.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mfaToken, code]
+              properties:
+                mfaToken: { type: string, description: From the login response }
+                code: { type: string, example: "492039" }
+      responses:
+        "200":
+          description: Signed in (same response as a normal login)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        "401": { description: "Wrong code, or the sign-in token expired (start again with the password)" }
+        "429": { description: Too many wrong codes; try again later }
+
+  /api/v1/account:
+    patch:
+      tags: [Account]
+      summary: Update your name
+      security:
+        - BearerAuth: []
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 100 }
+      responses:
+        "200": { description: Updated user }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/account/password:
+    post:
+      tags: [Account]
+      summary: Change your password
+      description: Every other device is signed out; the response carries a fresh session for this one.
+      security:
+        - BearerAuth: []
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string }
+                newPassword: { type: string, minLength: 8 }
+      responses:
+        "200": { description: Password changed }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { description: Current password is not correct }
+
+  /api/v1/account/mfa/setup:
+    post:
+      tags: [Account]
+      summary: Start two-factor setup
+      description: Returns a new secret as text, as an `otpauth://` link and as a QR code (SVG data URL).
+      security:
+        - BearerAuth: []
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        "200": { description: "`secret`, `otpauthUrl`, `qrCode`" }
+        "401": { description: Password is not correct }
+        "409": { description: Two-factor authentication is already on }
+
+  /api/v1/account/mfa/enable:
+    post:
+      tags: [Account]
+      summary: Confirm setup with a first code and turn two-factor on
+      security:
+        - BearerAuth: []
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        "200": { description: "On; `recoveryCodes` (10, shown only this once)" }
+        "400": { description: Wrong code or setup not started }
+
+  /api/v1/account/mfa/disable:
+    post:
+      tags: [Account]
+      summary: Turn two-factor off
+      security:
+        - BearerAuth: []
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password, code]
+              properties:
+                password: { type: string }
+                code: { type: string, description: Authenticator or recovery code }
+      responses:
+        "200": { description: "Off" }
+        "401": { description: Wrong password or code }
+
+  /api/v1/account/business:
+    patch:
+      tags: [Account]
+      summary: Update your business name (the email sender name) or contact email
+      security:
+        - BearerAuth: []
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 100 }
+                email: { type: string }
+      responses:
+        "200": { description: Updated business }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { description: Not a business account }
+
+  /api/v1/account/settings:
+    get:
+      tags: [Account]
+      summary: Delivery channels and limits for your account (no credentials)
+      security:
+        - BearerAuth: []
+        - SessionCookie: []
+      responses:
+        "200": { description: "`delivery` (email, sms, inApp: live or logged only) and `limits`" }
 
   /api/v1/auth/me:
     get:
