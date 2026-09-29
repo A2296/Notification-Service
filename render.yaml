@@ -21,6 +21,11 @@ services:
         sync: false
       - key: TRUST_PROXY
         value: "1"
+      # Shown on the dashboard's Help page (optional): a support address and/or help URL
+      - key: SUPPORT_EMAIL
+        sync: false
+      - key: SUPPORT_URL
+        sync: false
       - key: EMAIL_PROVIDER
         value: console
       - key: EMAIL_FROM

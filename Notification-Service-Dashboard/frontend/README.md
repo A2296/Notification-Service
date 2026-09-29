@@ -7,7 +7,7 @@ The dashboard is dependency-free: it is built with standard HTML, CSS, and JavaS
 ## Features
 
 - Business registration and sign-in; sign-out ends the session on the server
-- Overview of total, sent/delivered, in-progress, and failed notifications
+- Overview of total, sent/delivered, in-progress, and failed notifications, plus the in-app read rate (how many delivered in-app messages your app has marked read)
 - Notification composer for email, SMS, and in-app channels, with per-channel validation
 - Bulk mode: send one message to up to 100 recipients at once, with per-recipient results
 - Duplicate-send protection: a retried send reuses its `Idempotency-Key`
@@ -17,6 +17,7 @@ The dashboard is dependency-free: it is built with standard HTML, CSS, and JavaS
 - **Schedules**: recurring sends (daily, weekly on chosen days, or monthly) at a local time in any timezone, with pause, resume, run now and delete
 - **Profile** (top-right account button): who is signed in, their business, member since, last sign-in and two-factor status
 - **Settings**: business details, password change, two-factor authentication (QR code, recovery codes), sign out everywhere, delivery channel status, API base URL and documentation, limits
+- **Help & support**: what NotifyFlow is, getting-started steps, FAQ and the support contact set by the operator; open to visitors who are not signed in (`/#help`), and linked from the sign-in dialog
 - Two-step sign-in when two-factor authentication is on
 - Collapsible sidebar; the choice is remembered in this browser
 - API key management: generate (the secret is shown once), list, and revoke keys
@@ -79,6 +80,7 @@ All paths are relative to the page's own origin. The full reference is at `/docs
 | Profile and password | `PATCH /api/v1/account`, `POST /api/v1/account/password` |
 | Two-factor setup | `POST /api/v1/account/mfa/setup`, `/mfa/enable`, `/mfa/disable` |
 | Business and settings | `PATCH /api/v1/account/business`, `GET /api/v1/account/settings` |
+| Help & support contact | `GET /api/v1/support` (public) |
 | List API keys | `GET /api/v1/api-keys` |
 | Create API key | `POST /api/v1/api-keys` |
 | Revoke API key | `DELETE /api/v1/api-keys/:id` |

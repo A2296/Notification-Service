@@ -271,7 +271,7 @@ body {
 }
 .stats-grid {
   display:grid;
-  grid-template-columns:repeat(4,1fr);
+  grid-template-columns:repeat(5,1fr);
   gap:16px;
   margin:23px 0
 }
@@ -576,6 +576,68 @@ td strong {
 .limits-title {
   margin-top:8px!important
 }
+.full-span {
+  grid-column:1/-1
+}
+.inline-link {
+  color:var(--teal-dark);
+  font-weight:800
+}
+.help-view .settings-grid {
+  grid-template-columns:repeat(2,minmax(0,1fr))
+}
+.help-view code {
+  font:500 12px "DM Mono",monospace;
+  background:#f4f7f7;
+  border-radius:4px;
+  padding:1px 5px;
+  overflow-wrap:anywhere
+}
+.steps-list {
+  margin:0;
+  padding-left:20px;
+  display:grid;
+  gap:10px;
+  color:#43545e;
+  font-size:13px;
+  line-height:1.55
+}
+.steps-list strong {
+  color:var(--ink)
+}
+.faq-list details {
+  border-top:1px solid var(--line);
+  padding:12px 0
+}
+.faq-list details:last-child {
+  padding-bottom:0
+}
+.faq-list summary {
+  cursor:pointer;
+  color:var(--ink);
+  font-size:13px;
+  font-weight:700
+}
+.faq-list summary:hover {
+  color:var(--teal-dark)
+}
+.faq-list details .subtle,.faq-list .status-guide {
+  margin-top:8px
+}
+.status-guide {
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:grid;
+  gap:8px;
+  color:var(--muted);
+  font-size:12px
+}
+.status-guide .status {
+  min-width:76px;
+  margin-right:8px;
+  text-align:center
+}
 .schedule-actions {
   display:flex;
   flex-wrap:wrap;
@@ -878,6 +940,14 @@ dialog label {
   transform:translateY(0);
   opacity:1
 }
+@media(max-width:1240px) {
+  .stats-grid {
+    grid-template-columns:repeat(3,1fr)
+  }
+  .stat-card:last-child {
+    grid-column:span 2
+  }
+}
 @media(max-width:900px) {
   .app-shell {
     grid-template-columns:210px 1fr
@@ -890,6 +960,9 @@ dialog label {
   }
   .credentials-layout {
     grid-template-columns:1fr
+  }
+  .help-view .settings-grid {
+    grid-template-columns:minmax(0,1fr)
   }
   .hero-card {
     padding:28px

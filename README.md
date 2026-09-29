@@ -31,7 +31,7 @@ Built with Node.js, Express 5, MongoDB (Mongoose), Nodemailer and Twilio.
 | Authorization | Business users vs. platform `ADMIN`; suspending a business blocks its keys and logins at once |
 | Channels | `EMAIL` (any SMTP provider), `SMS` (Twilio), `IN_APP` (per-recipient inbox with read tracking) |
 | Delivery | Background worker, automatic retries with exponential backoff, permanent-failure detection, crash recovery, scheduled sends |
-| Tracking | `PENDING → PROCESSING → SENT → DELIVERED / FAILED`, with a timestamped event history per notification |
+| Tracking | `PENDING → PROCESSING → SENT → DELIVERED / FAILED`, with a timestamped event history per notification; in-app read rate (read / delivered) |
 | Reliability | `Idempotency-Key` header prevents duplicate sends; manual retry of failed notifications (API or dashboard) |
 | Bulk sends | Up to 100 notifications per request, shared fields plus per-recipient overrides, per-item results |
 | Scheduling | Send later (`scheduledAt`) and recurring schedules: daily, weekly or monthly at a local time in the business's timezone, with pause, resume and run now |
@@ -41,7 +41,7 @@ Built with Node.js, Express 5, MongoDB (Mongoose), Nodemailer and Twilio.
 | Dashboard | Business web dashboard served by the API at `/` (see below) |
 | Operations | Docker, docker-compose (with a local email inbox), `/health`, graceful shutdown, GitHub Actions CI, Render blueprint |
 | Accounts | Profile, business details, password change (signs out other devices), two-factor authentication, delivery and limits overview |
-| Docs & tests | OpenAPI 3 spec + Swagger UI; 111 tests |
+| Docs & tests | OpenAPI 3 spec + Swagger UI; 115 tests |
 
 ---
 
@@ -52,7 +52,7 @@ is served by the API itself, so it is available at `http://localhost:5000/` (or 
 with no separate hosting or configuration.
 
 - Business registration and sign-in; sign-out ends the session on the server
-- Overview of total, sent/delivered, in-progress and failed notifications
+- Overview of total, sent/delivered, in-progress and failed notifications, plus the in-app read rate
 - Notification composer for email, SMS and in-app channels (with duplicate-send protection)
 - Bulk mode: paste up to 100 recipients and send the same message to all of them
 - Delivery-activity table with server-side search and status filters
@@ -61,6 +61,7 @@ with no separate hosting or configuration.
 - **Schedules** page: recurring sends (every day, chosen weekdays or a day of the month) with pause, resume, run now and delete
 - **Profile** (top-right account button): name, email, role, business, member since, last sign-in, two-factor status and sign-out
 - **Settings**: business details, password change, two-factor authentication with recovery codes, sign out everywhere, delivery channel status, API base URL, API documentation and your limits
+- **Help & support**: what NotifyFlow is, getting-started steps, FAQ and a support contact (`SUPPORT_EMAIL`, `SUPPORT_URL`); readable before signing in, and linked from the sign-in dialog
 - Collapsible sidebar (icon rail on desktop; your choice is remembered in this browser)
 - API key management: generate (secret shown once), list, revoke, plus a ready-to-run `curl` sample
 - Demo mode with sample data when the page is opened without the API (e.g. from a static server)
@@ -430,7 +431,7 @@ docker rm -f mongo-test     # when you're done
 If port 27017 is already in use (for example by a local MongoDB), stop that first or point the
 tests elsewhere with `TEST_DB_URL`.
 
-111 tests run against a real MongoDB (override with `TEST_DB_URL`), covering auth,
+115 tests run against a real MongoDB (override with `TEST_DB_URL`), covering auth,
 sessions and logout, two-factor authentication (RFC 6238 test vectors, replay, lockout), JWT tampering, the dashboard CSP, API keys, sending on every channel,
 bulk sends, recurring schedules (timezones, daylight saving, crash safety), retries and failures,
 scheduling, crash recovery, idempotency, tenant isolation,
@@ -498,5 +499,6 @@ Backend capstone project. Contributors (from the Git history; update each role a
 | 3gerrr | DevOps and integration: testing, Docker, CI/CD, deployment, multi-tenant platform, delivery worker |
 | Valentine_M | Repository setup |
 | Adeshinayomi | Repository configuration |
+| Bude1229 | Product features: Help & support page, in-app read rate, subscription plans and usage limits |
 | Macfrancis C. Nwaigwe dashtech-c | Frontend Developer: Designed and implemented the Notification Service dashboard, including business registration/sign-in, API connection settings, API credential management, notification composer, delivery activity tracking, and responsive user interface styling. |
 
