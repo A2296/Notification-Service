@@ -22,6 +22,12 @@ const config = {
     lockMinutes: 15,
   },
 
+  // Where businesses get help; both optional and shown publicly on the dashboard's Help page
+  support: {
+    email: process.env.SUPPORT_EMAIL || null,
+    url: process.env.SUPPORT_URL || null,
+  },
+
   schedules: {
     // Recurring schedules a business may have (each sends to up to 100 recipients per run)
     maxPerBusiness: Number(process.env.MAX_SCHEDULES) || 20,

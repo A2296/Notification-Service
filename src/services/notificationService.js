@@ -262,7 +262,11 @@ const retryNotification = async (businessId, id) => {
 };
 
 const getStats = async (matchQuery) => {
-  const [byStatus, byChannel] = await Promise.all([
+  // Only in-app messages can be tracked as read (the business's app reports it),
+  // so the read rate is read / delivered for IN_APP alone
+  const inAppDelivered = { ...matchQuery, channel: "IN_APP", status: "DELIVERED" };
+
+  const [byStatus, byChannel, delivered, read] = await Promise.all([
     Notification.aggregate([
       { $match: matchQuery },
       { $group: { _id: "$status", count: { $sum: 1 } } },
@@ -271,6 +275,8 @@ const getStats = async (matchQuery) => {
       { $match: matchQuery },
       { $group: { _id: "$channel", count: { $sum: 1 } } },
     ]),
+    Notification.countDocuments(inAppDelivered),
+    Notification.countDocuments({ ...inAppDelivered, readAt: { $ne: null } }),
   ]);
 
   const toObject = (rows) =>
@@ -282,6 +288,7 @@ const getStats = async (matchQuery) => {
     total: Object.values(statuses).reduce((sum, count) => sum + count, 0),
     byStatus: statuses,
     byChannel: toObject(byChannel),
+    inApp: { delivered, read },
   };
 };
 

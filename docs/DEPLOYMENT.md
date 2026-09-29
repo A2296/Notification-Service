@@ -22,6 +22,7 @@ The service is one Docker container plus a MongoDB database. This guide deploys 
    | `DB_CONNECTION_STRING` | Atlas string from step 1 |
    | `PUBLIC_BASE_URL` | `https://<service-name>.onrender.com` (you can set it after the first deploy) |
    | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Your platform admin login |
+   | `SUPPORT_EMAIL`, `SUPPORT_URL` | Optional: shown on the dashboard's **Help & support** page (e.g. a support address and your issue tracker) |
    | SMTP / Twilio values | Leave blank to start with the console providers |
 
    `JWT_SECRET` is generated automatically.

@@ -41,7 +41,7 @@ tags:
   - name: Admin
     description: Platform operators only (role ADMIN)
   - name: System
-    description: Health and provider webhooks
+    description: Health, support contact and provider webhooks
 
 components:
   securitySchemes:
@@ -295,6 +295,14 @@ components:
         total: { type: integer }
         byStatus: { type: object, additionalProperties: { type: integer } }
         byChannel: { type: object, additionalProperties: { type: integer } }
+        inApp:
+          type: object
+          description: |
+            In-app read tracking. `read` counts delivered IN_APP notifications your app has
+            marked read (`PATCH /api/v1/notifications/{id}/read`). Email and SMS opens are not tracked.
+          properties:
+            delivered: { type: integer }
+            read: { type: integer }
 
 security:
   - ApiKey: []
@@ -310,6 +318,29 @@ paths:
       responses:
         "200": { description: Healthy }
         "503": { description: Database disconnected }
+
+  /api/v1/support:
+    get:
+      tags: [System]
+      summary: Where to get help with this deployment
+      description: |
+        Public. Shown on the dashboard's Help page. Each value is `null` when the operator
+        has not set it (`SUPPORT_EMAIL`, `SUPPORT_URL`).
+      security: []
+      responses:
+        "200":
+          description: Support contact
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  support:
+                    type: object
+                    properties:
+                      email: { type: string, format: email, nullable: true }
+                      url: { type: string, format: uri, nullable: true }
 
   /api/v1/auth/register:
     post:
@@ -771,7 +802,7 @@ paths:
   /api/v1/notifications/stats:
     get:
       tags: [Notifications]
-      summary: Counts by status and channel for your business
+      summary: Counts by status and channel, and the in-app read count, for your business
       responses:
         "200":
           description: Stats

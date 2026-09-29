@@ -30,6 +30,7 @@
           <a class="nav-link" href="#credentials" data-view="credentials" title="API credentials"><span class="nav-icon">⌘</span><span class="nav-label">API credentials</span></a>
         </nav>
         <div class="sidebar-footer">
+          <a class="nav-link" href="#help" data-view="help" title="Help &amp; support"><span class="nav-icon">?</span><span class="nav-label">Help &amp; support</span></a>
           <a class="nav-link" href="#profile" data-view="profile" title="Profile"><span class="nav-icon">◉</span><span class="nav-label">Profile</span></a>
           <a class="nav-link" href="#settings" data-view="settings" title="Settings"><span class="nav-icon">⚙</span><span class="nav-label">Settings</span></a>
           <p class="sidebar-note">Notification infrastructure<br />for product teams.</p>
@@ -61,6 +62,7 @@
             <article class="stat-card"><p>Sent or delivered</p><strong id="deliveredCount">—</strong><small class="positive" id="deliveryRate">Accepted by providers</small></article>
             <article class="stat-card"><p>In progress</p><strong id="pendingCount">—</strong><small>Queued or with the provider</small></article>
             <article class="stat-card"><p>Failed</p><strong id="failedCount">—</strong><small class="warning">Needs attention</small></article>
+            <article class="stat-card"><p>In-app read rate</p><strong id="readRate">—</strong><small id="readRateNote">Marked read by your app</small></article>
           </section>
 
           <section class="content-card activity-preview">
@@ -129,6 +131,79 @@
             <table><thead><tr><th>Schedule</th><th>Channel</th><th>Recipients</th><th>Repeats</th><th>Next run</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="scheduleRows"></tbody></table>
             <p class="empty-state hidden" id="emptySchedules">No schedules yet. Create one above.</p>
           </section>
+        </section>
+
+        <section class="view help-view" id="help">
+          <div class="section-heading"><div><p class="eyebrow">HELP &amp; SUPPORT</p><h2>How NotifyFlow works</h2><p class="subtle">What the service does, how to start sending and where to get help.</p></div></div>
+          <div class="settings-grid">
+            <section class="content-card settings-form">
+              <p class="eyebrow">ABOUT</p><h3>What is NotifyFlow?</h3>
+              <p class="subtle">NotifyFlow sends email, SMS and in-app notifications for your business through one API. Your server makes one request; NotifyFlow checks it, delivers it through the right provider, retries temporary failures and records every status change, so you can see what happened to each message.</p>
+              <ul class="status-list">
+                <li><span><strong>✉ Email</strong><span class="row-note">Through any SMTP email provider</span></span></li>
+                <li><span><strong>◌ SMS</strong><span class="row-note">Through Twilio, with delivery reports</span></span></li>
+                <li><span><strong>▣ In-app</strong><span class="row-note">Kept in each user's inbox in your app, with read tracking</span></span></li>
+              </ul>
+            </section>
+
+            <section class="content-card settings-form">
+              <p class="eyebrow">GET STARTED</p><h3>Send your first notification</h3>
+              <ol class="steps-list">
+                <li><strong>Create your business account.</strong> Choose <em>Sign in</em>, then <em>Create an account</em>.</li>
+                <li><strong>Try it from the dashboard.</strong> Write a message on <em>Send notification</em> and follow it in <em>Activity</em>.</li>
+                <li><strong>Generate an API key.</strong> The secret is shown once: keep it on your server, never in browser or mobile code.</li>
+                <li><strong>Send from your server.</strong> Call <code>POST /api/v1/notifications</code> with the <code>X-API-Key</code> and <code>X-API-Secret</code> headers.</li>
+              </ol>
+              <div class="key-actions"><button class="primary-button" type="button" data-go-to="send">Send a notification</button><button class="secondary-button" type="button" data-go-to="credentials">API keys</button><a class="secondary-button" href="/docs" target="_blank" rel="noopener noreferrer">API documentation</a></div>
+            </section>
+
+            <section class="content-card settings-form full-span">
+              <p class="eyebrow">FAQ</p><h3>Frequently asked questions</h3>
+              <div class="faq-list">
+                <details>
+                  <summary>Why didn't my email or SMS arrive?</summary>
+                  <p class="subtle">Open <em>Settings → Delivery channels</em>. A channel marked <strong>logged only</strong> is not connected to a provider yet, so its messages are written to the server log instead of being sent. The public demo runs this way. If a notification shows <strong>failed</strong> in <em>Activity</em>, the provider's error is shown beside it: fix the cause, then click <strong>Retry</strong>.</p>
+                </details>
+                <details>
+                  <summary>What do the statuses mean?</summary>
+                  <ul class="status-guide">
+                    <li><span class="status pending">pending</span> Waiting to be sent, or scheduled for later</li>
+                    <li><span class="status processing">processing</span> Being handed to the provider</li>
+                    <li><span class="status sent">sent</span> Accepted by the email or SMS provider</li>
+                    <li><span class="status delivered">delivered</span> Confirmed: in the user's inbox (in-app) or reported delivered by Twilio (SMS)</li>
+                    <li><span class="status failed">failed</span> Could not be delivered, even after retries; the reason is shown in Activity</li>
+                  </ul>
+                </details>
+                <details>
+                  <summary>Can I see whether people read my notifications?</summary>
+                  <p class="subtle">For in-app notifications, yes. When your app marks a message as read (<code>PATCH /api/v1/notifications/{id}/read</code>), it counts toward the <strong>In-app read rate</strong> on the Overview. Email and SMS opens are not tracked: open tracking is unreliable, because many email apps open or block images automatically, and it would mean changing the messages you send.</p>
+                </details>
+                <details>
+                  <summary>How do I avoid sending the same message twice?</summary>
+                  <p class="subtle">Send an <code>Idempotency-Key</code> header, such as <code>order-10482-shipped</code>. If the same request is repeated with the same key (for example after a network timeout), NotifyFlow returns the original notification instead of sending it again.</p>
+                </details>
+                <details>
+                  <summary>What happens if I send too many requests?</summary>
+                  <p class="subtle">Requests over your limit get HTTP <code>429 Too many requests</code>. Wait a minute and try again. Your limits are listed under <em>Settings → Your limits</em>.</p>
+                </details>
+                <details>
+                  <summary>I lost my API secret. Can I see it again?</summary>
+                  <p class="subtle">No. The secret is stored only as a one-way hash, so it cannot be shown again. Generate a new key on <em>API credentials</em>, update your server, then revoke the old key.</p>
+                </details>
+                <details>
+                  <summary>I lost the phone with my authenticator app.</summary>
+                  <p class="subtle">Sign in with one of the recovery codes you saved when you turned on two-factor authentication, in place of the 6-digit code. Each code works once. Then, in <em>Settings</em>, turn two-factor off (using another recovery code) and on again to link your new phone.</p>
+                </details>
+              </div>
+            </section>
+
+            <section class="content-card settings-form full-span">
+              <p class="eyebrow">SUPPORT</p><h3>Still need help?</h3>
+              <p class="subtle" id="supportNote">Contact the team that runs this NotifyFlow service.</p>
+              <p class="subtle">To help find the problem quickly, include the notification ID (shown under its title in <em>Activity</em>) and roughly when it happened. Never send your API secret or password.</p>
+              <div class="key-actions" id="supportActions"></div>
+            </section>
+          </div>
         </section>
 
         <section class="view" id="profile">
@@ -251,6 +326,7 @@
         <button class="dialog-close" type="button" aria-label="Close">×</button>
         <p class="eyebrow">BUSINESS PORTAL</p><h2 id="authTitle">Sign in to your workspace</h2>
         <p class="subtle" id="authDescription">Use your business account to securely manage notifications and API credentials.</p>
+        <p class="subtle">New to NotifyFlow? <a class="inline-link" href="#help" id="authHelpLink">See how it works</a></p>
         <label class="register-only hidden">Business name<input id="businessName" type="text" maxlength="100" autocomplete="organization" placeholder="Acme Inc." /></label>
         <label class="register-only hidden">Your name<input id="authName" type="text" maxlength="100" autocomplete="name" placeholder="Ada Lovelace" /></label>
         <label class="password-step">Work email<input id="authEmail" type="email" required maxlength="254" autocomplete="email" placeholder="you@company.com" /></label>

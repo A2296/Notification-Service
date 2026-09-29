@@ -126,6 +126,36 @@ test("only IN_APP notifications can be marked read", async () => {
   assert.equal(read.status, 400);
 });
 
+test("stats count delivered in-app notifications and how many were read", async () => {
+  const biz = await createBusiness("Reader");
+  const inApp = (id) => send(biz, { channel: "IN_APP", recipient: { id }, message: "Hello" });
+
+  const first = await inApp("reader_1");
+  await inApp("reader_2");
+  // Scheduled for later, so still PENDING: it is not delivered yet and must not count
+  await send(biz, {
+    channel: "IN_APP",
+    recipient: { id: "reader_3" },
+    message: "Later",
+    scheduledAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+  });
+  await send(biz, emailBody());
+  await deliveryWorker.processPending();
+
+  const read = await request(app)
+    .patch(`/api/v1/notifications/${first.body.notification.id}/read`)
+    .set(biz.apiHeaders);
+  assert.equal(read.status, 200);
+
+  const stats = await request(app).get("/api/v1/notifications/stats").set(biz.apiHeaders);
+  assert.equal(stats.status, 200);
+  assert.deepEqual(stats.body.stats.inApp, { delivered: 2, read: 1 });
+
+  // Other businesses' reads never show up in this business's numbers
+  const other = await request(app).get("/api/v1/notifications/stats").set(globex.apiHeaders);
+  assert.equal(other.body.stats.inApp.read, 0);
+});
+
 test("dashboard users (JWT) can also send and list notifications", async () => {
   const res = await request(app)
     .post("/api/v1/notifications")
@@ -330,6 +360,7 @@ test("list supports filters, literal search and pagination", async () => {
     total: 4,
     byStatus: { SENT: 4 },
     byChannel: { EMAIL: 3, SMS: 1 },
+    inApp: { delivered: 0, read: 0 },
   });
 });
 

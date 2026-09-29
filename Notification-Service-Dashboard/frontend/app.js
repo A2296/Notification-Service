@@ -53,7 +53,8 @@ const TITLES = {
   schedules: 'Recurring schedules',
   profile: 'Your profile',
   settings: 'Settings',
-  credentials: 'API credentials'
+  credentials: 'API credentials',
+  help: 'Help & support'
 };
 
 const state = {
@@ -64,6 +65,8 @@ const state = {
   apiKeys: [],
   schedules: [],
   settings: null,
+  // Public support contact for this deployment (same for every visitor)
+  support: null,
   // Between the password and the two-factor code; kept in memory only
   mfaToken: null,
   // Which part of the two-factor setup is showing (null = based on the account)
@@ -309,6 +312,15 @@ function sampleNotifications() {
       createdAt: minutesAgo(34)
     },
     {
+      id: 'ntf_4h8s2k',
+      subject: 'Your invoice is ready',
+      channel: 'IN_APP',
+      to: 'user_1893',
+      status: 'DELIVERED',
+      readAt: minutesAgo(40),
+      createdAt: minutesAgo(45)
+    },
+    {
       id: 'ntf_1p5x8z',
       subject: 'Payment receipt',
       channel: 'EMAIL',
@@ -316,6 +328,14 @@ function sampleNotifications() {
       status: 'FAILED',
       failureReason: '550 5.1.1 Recipient mailbox unavailable',
       createdAt: minutesAgo(65)
+    },
+    {
+      id: 'ntf_8m3t5j',
+      subject: 'Complete your profile',
+      channel: 'IN_APP',
+      to: 'user_3307',
+      status: 'DELIVERED',
+      createdAt: minutesAgo(95)
     },
     {
       id: 'ntf_6c0h2w',
@@ -347,7 +367,15 @@ function statsFrom(notifications) {
     byStatus[item.status] = (byStatus[item.status] || 0) + 1;
   }
 
-  return { total: notifications.length, byStatus };
+  const inApp = notifications.filter(
+    (item) => item.channel === 'IN_APP' && item.status === 'DELIVERED'
+  );
+
+  return {
+    total: notifications.length,
+    byStatus,
+    inApp: { delivered: inApp.length, read: inApp.filter((item) => item.readAt).length }
+  };
 }
 
 // ---- Rendering ----
@@ -444,6 +472,9 @@ function notificationRow(item) {
   return row;
 }
 
+// 2 of 3 -> 66.7
+const percent = (part, whole) => Math.round((part / whole) * 1000) / 10;
+
 function renderStats(stats) {
   const byStatus = stats?.byStatus || {};
   const count = (...statuses) =>
@@ -462,12 +493,25 @@ function renderStats(stats) {
   let rate = 'Accepted by providers';
 
   if (stats?.total) {
-    rate = `${Math.round((delivered / stats.total) * 1000) / 10}% of all notifications`;
+    rate = `${percent(delivered, stats.total)}% of all notifications`;
   } else if (stats) {
     rate = 'No notifications yet';
   }
 
   el('#deliveryRate').textContent = rate;
+
+  // Only in-app messages can be tracked as read (your app reports it); email and SMS opens are not
+  const inApp = stats?.inApp;
+  let readNote = 'Marked read by your app';
+
+  if (inApp?.delivered) {
+    readNote = `${inApp.read.toLocaleString()} of ${inApp.delivered.toLocaleString()} delivered in-app messages`;
+  } else if (inApp) {
+    readNote = 'No in-app messages delivered yet';
+  }
+
+  el('#readRate').textContent = inApp?.delivered ? `${percent(inApp.read, inApp.delivered)}%` : '—';
+  el('#readRateNote').textContent = readNote;
 }
 
 function activeKey() {
@@ -675,6 +719,10 @@ function refreshView(view = state.view) {
 
   if (view === 'settings') {
     return loadSettings();
+  }
+
+  if (view === 'help') {
+    return loadSupport();
   }
 
   return refreshDashboard();
@@ -2020,6 +2068,61 @@ async function disableMfa(event) {
   }
 }
 
+// ---- Help & support ----
+
+function supportLink(className, text, href) {
+  const link = createElement('a', { className, text });
+  link.href = href;
+
+  if (!href.startsWith('mailto:')) {
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+  }
+
+  return link;
+}
+
+function renderSupport(support) {
+  // The API only returns a valid address and an http(s) URL; checked again before becoming links
+  const email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(support?.email || '') ? support.email : null;
+  const url = /^https?:\/\//i.test(support?.url || '') ? support.url : null;
+  const actions = [];
+  let note = 'Contact the team that runs this NotifyFlow service.';
+
+  if (email) {
+    note = `Email ${email}${url ? ', or use the help link below' : ''}.`;
+    actions.push(supportLink('primary-button', 'Email support', `mailto:${email}`));
+  } else if (url) {
+    note = 'Use the help link below to reach the team that runs this service.';
+  }
+
+  if (url) {
+    actions.push(supportLink('secondary-button', 'Get help online', url));
+  }
+
+  actions.push(supportLink('secondary-button', 'API documentation', '/docs'));
+
+  el('#supportNote').textContent = note;
+  el('#supportActions').replaceChildren(...actions);
+}
+
+// Public, so it also works for visitors who cannot sign in
+async function loadSupport() {
+  if (state.mode !== 'live' || state.support) {
+    renderSupport(state.support);
+    return;
+  }
+
+  try {
+    const { support } = await request(`${API_BASE}/support`);
+    state.support = support;
+  } catch {
+    // The page still shows the general advice and the API documentation link
+  }
+
+  renderSupport(state.support);
+}
+
 // ---- Sidebar ----
 
 // A display preference for this browser only; never credentials or account data
@@ -2179,6 +2282,8 @@ notificationForm.addEventListener('input', () => {
 
 el('#authForm').addEventListener('submit', submitAuth);
 el('#authDialog .dialog-close').addEventListener('click', () => authDialog.close());
+// The link's #help then opens the Help page
+el('#authHelpLink').addEventListener('click', () => authDialog.close());
 authDialog.addEventListener('click', (event) => {
   if (event.target === authDialog) {
     authDialog.close();
@@ -2267,7 +2372,13 @@ async function init() {
     setSignedIn(user);
   } catch {
     setSignedOut();
-    openAuthDialog();
+
+    // A shared link to the Help page opens it without the sign-in dialog on top
+    if (state.view === 'help') {
+      loadSupport();
+    } else {
+      openAuthDialog();
+    }
   }
 }
 
