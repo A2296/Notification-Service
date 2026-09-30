@@ -35,13 +35,14 @@ Built with Node.js, Express 5, MongoDB (Mongoose), Nodemailer and Twilio.
 | Reliability | `Idempotency-Key` header prevents duplicate sends; manual retry of failed notifications (API or dashboard) |
 | Bulk sends | Up to 100 notifications per request, shared fields plus per-recipient overrides, per-item results |
 | Scheduling | Send later (`scheduledAt`) and recurring schedules: daily, weekly or monthly at a local time in the business's timezone, with pause, resume and run now |
+| Plans & usage | Free / Starter / Pro plans with a monthly notification limit (1,000 / 10,000 / 100,000 by default), assigned by the platform admin (no payments); usage counted from the notifications themselves, shown on the dashboard, and enforced for single, bulk and scheduled sends |
 | Recipients | Store your users' contact details once, then send by your own user ID |
 | Validation | Every request is validated with zod and returns field-level error messages |
 | Security | Helmet headers and a strict CSP for the dashboard, CSRF protection, per-IP login rate limit, per-business API rate limit, NoSQL/regex injection protection, bcrypt passwords, audit log |
 | Dashboard | Business web dashboard served by the API at `/` (see below) |
 | Operations | Docker, docker-compose (with a local email inbox), `/health`, graceful shutdown, GitHub Actions CI, Render blueprint |
 | Accounts | Profile, business details, password change (signs out other devices), two-factor authentication, delivery and limits overview |
-| Docs & tests | OpenAPI 3 spec + Swagger UI; 115 tests |
+| Docs & tests | OpenAPI 3 spec + Swagger UI; 121 tests |
 
 ---
 
@@ -52,7 +53,7 @@ is served by the API itself, so it is available at `http://localhost:5000/` (or 
 with no separate hosting or configuration.
 
 - Business registration and sign-in; sign-out ends the session on the server
-- Overview of total, sent/delivered, in-progress and failed notifications, plus the in-app read rate
+- Overview of total, sent/delivered, in-progress and failed notifications, plus the in-app read rate and this month's plan usage (amber near the limit, red when it is reached)
 - Notification composer for email, SMS and in-app channels (with duplicate-send protection)
 - Bulk mode: paste up to 100 recipients and send the same message to all of them
 - Delivery-activity table with server-side search and status filters
@@ -60,8 +61,9 @@ with no separate hosting or configuration.
 - **Send later**: pick a date and time in the composer
 - **Schedules** page: recurring sends (every day, chosen weekdays or a day of the month) with pause, resume, run now and delete
 - **Profile** (top-right account button): name, email, role, business, member since, last sign-in, two-factor status and sign-out
-- **Settings**: business details, password change, two-factor authentication with recovery codes, sign out everywhere, delivery channel status, API base URL, API documentation and your limits
-- **Help & support**: what NotifyFlow is, getting-started steps, FAQ and a support contact (`SUPPORT_EMAIL`, `SUPPORT_URL`); readable before signing in, and linked from the sign-in dialog
+- **Settings**: business details, plan and usage, password change, two-factor authentication with recovery codes, sign out everywhere, delivery channel status, API base URL, API documentation and your limits
+- **Help & support**: what NotifyFlow is, getting-started steps, the plans on offer, FAQ and a support contact (`SUPPORT_EMAIL`, `SUPPORT_URL`); readable before signing in, and linked from the sign-in dialog
+- On phones the sidebar is a drawer: a tap outside it or Escape closes it (without pressing what is underneath), and the page behind it stays still; on short screens the sidebar scrolls
 - Collapsible sidebar (icon rail on desktop; your choice is remembered in this browser)
 - API key management: generate (secret shown once), list, revoke, plus a ready-to-run `curl` sample
 - Demo mode with sample data when the page is opened without the API (e.g. from a static server)
@@ -294,20 +296,31 @@ Full request/response details are in **`/docs`**.
 | `GET/PATCH/DELETE /api/v1/schedules/:id` | API key or JWT | View, change, pause/resume or delete a schedule |
 | `POST /api/v1/schedules/:id/run` | API key or JWT | Send a schedule's message now |
 | `GET /api/v1/notifications` | API key or JWT | List with `search`, `channel`, `status`, `recipientId`, `from`, `to`, `page`, `limit` |
-| `GET /api/v1/notifications/stats` | API key or JWT | Counts by status and channel |
+| `GET /api/v1/notifications/stats` | API key or JWT | Counts by status and channel, in-app read count |
+| `GET /api/v1/notifications/usage` | API key or JWT | Your plan, notifications used this month, remaining, reset date |
 | `GET /api/v1/notifications/:id` | API key or JWT | Details + status history |
 | `PATCH /api/v1/notifications/:id/read` | API key or JWT | Mark in-app notification read |
 | `POST /api/v1/notifications/:id/retry` | API key or JWT | Retry a failed notification |
 | `POST/GET /api/v1/recipients` | API key or JWT | Upsert / list recipients |
 | `GET/PATCH/DELETE /api/v1/recipients/:externalId` | API key or JWT | Manage one recipient |
 | `GET /api/v1/recipients/:externalId/inbox` | API key or JWT | In-app inbox (`unread=true` supported) |
-| `GET /api/v1/admin/businesses`, `PATCH /api/v1/admin/businesses/:id` | ADMIN | List / suspend / reactivate businesses |
-| `GET /api/v1/admin/notifications`, `/admin/stats`, `/admin/businesses/:id/stats` | ADMIN | Platform monitoring |
+| `GET /api/v1/admin/businesses`, `PATCH /api/v1/admin/businesses/:id` | ADMIN | List (filter by `status` or `plan`) / suspend / reactivate businesses, change a business's plan (`{ "plan": "STARTER" }`) |
+| `GET /api/v1/admin/notifications`, `/admin/stats`, `/admin/businesses/:id/stats` | ADMIN | Platform monitoring (per-business stats include plan usage) |
 | `POST /api/v1/webhooks/twilio/status` | Twilio signature | SMS delivery reports |
+| `GET /api/v1/plans`, `GET /api/v1/support` | none | Plans on offer; support contact for the Help page |
 | `GET /health` | none | Liveness + database status |
 
 All responses use `{ "success": true|false, ... }`. Validation errors include an `errors` array
 of `{ field, message }`.
+
+**Monthly limits.** Each plan allows a number of notifications per calendar month (UTC). Once it is
+used up, new notifications get **429** with `"code": "MONTHLY_LIMIT_REACHED"` and a message saying
+when the limit resets (the per-minute rate limits also use 429, without a `code`). Notifications
+already accepted are still delivered; retries and repeated `Idempotency-Key` requests do not count.
+In a bulk request, the items that fit are accepted and the rest are reported in `results`.
+Recurring schedules skip a run when nothing is left and record why in `lastRun`. A platform admin
+changes a plan with `PATCH /api/v1/admin/businesses/:id` and `{ "plan": "STARTER" }` (for example
+from Swagger at `/docs`); the new limit applies at once.
 
 "JWT" means either the `ns_session` cookie (set by login, used by the dashboard) or an
 `Authorization: Bearer <token>` header. Requests that change data using the cookie must also send
@@ -431,11 +444,11 @@ docker rm -f mongo-test     # when you're done
 If port 27017 is already in use (for example by a local MongoDB), stop that first or point the
 tests elsewhere with `TEST_DB_URL`.
 
-115 tests run against a real MongoDB (override with `TEST_DB_URL`), covering auth,
+121 tests run against a real MongoDB (override with `TEST_DB_URL`), covering auth,
 sessions and logout, two-factor authentication (RFC 6238 test vectors, replay, lockout), JWT tampering, the dashboard CSP, API keys, sending on every channel,
 bulk sends, recurring schedules (timezones, daylight saving, crash safety), retries and failures,
-scheduling, crash recovery, idempotency, tenant isolation,
-admin controls, rate limits and webhook signatures. Providers are swapped for fakes, so no email
+scheduling, crash recovery, idempotency, tenant isolation, plan limits (single, bulk and scheduled
+sends, month boundaries, plan changes), admin controls, rate limits and webhook signatures. Providers are swapped for fakes, so no email
 or SMS is sent; the SMTP provider itself is tested against in-process fake mail servers. GitHub Actions runs the tests, `npm audit` and a
 Docker build on every pull request.
 

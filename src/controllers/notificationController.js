@@ -1,4 +1,5 @@
 const notificationService = require("../services/notificationService");
+const usageService = require("../services/usageService");
 const { z } = require("zod");
 
 const idempotencyKeySchema = z.string().trim().min(1).max(255);
@@ -130,6 +131,16 @@ const getStats = async (req, res) => {
   });
 };
 
+// This month's usage against the business's plan limit
+const getUsage = async (req, res) => {
+  const usage = await usageService.getUsage(req.business._id);
+
+  res.status(200).json({
+    success: true,
+    usage,
+  });
+};
+
 module.exports = {
   createNotification,
   createBulkNotifications,
@@ -138,4 +149,5 @@ module.exports = {
   markAsRead,
   retryNotification,
   getStats,
+  getUsage,
 };

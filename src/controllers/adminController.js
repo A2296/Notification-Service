@@ -3,12 +3,17 @@ const Business = require("../models/businessSchema");
 const HttpError = require("../utils/httpError");
 const audit = require("../utils/audit");
 const notificationService = require("../services/notificationService");
+const usageService = require("../services/usageService");
 
 // Platform administration (role ADMIN). Businesses never reach these routes.
 
 const listBusinesses = async (req, res) => {
-  const { page, limit, status } = req.validated.query;
-  const query = status ? { status } : {};
+  const { page, limit, status, plan } = req.validated.query;
+  const query = {
+    ...(status ? { status } : {}),
+    // Businesses created before plans existed have no plan field and are on FREE
+    ...(plan ? { plan: plan === "FREE" ? { $in: ["FREE", null] } : plan } : {}),
+  };
 
   const [businesses, total] = await Promise.all([
     Business.find(query)
@@ -30,23 +35,35 @@ const listBusinesses = async (req, res) => {
   });
 };
 
-// Suspending a business immediately blocks its API keys and dashboard logins
-const updateBusinessStatus = async (req, res) => {
+// Suspending a business immediately blocks its API keys and dashboard logins.
+// Changing its plan changes its monthly notification limit at once.
+const updateBusiness = async (req, res) => {
+  const { status, plan } = req.validated.body;
   const business = await Business.findByIdAndUpdate(
     req.validated.params.id,
-    { status: req.validated.body.status },
-    { returnDocument: "after" }
+    { ...(status ? { status } : {}), ...(plan ? { plan } : {}) },
+    { returnDocument: "after", runValidators: true }
   );
 
   if (!business) {
     throw new HttpError(404, "Business not found");
   }
 
-  audit("admin.business.status", req, {
-    adminId: req.user.id,
-    businessId: business._id,
-    status: business.status,
-  });
+  if (status) {
+    audit("admin.business.status", req, {
+      adminId: req.user.id,
+      businessId: business._id,
+      status: business.status,
+    });
+  }
+
+  if (plan) {
+    audit("admin.business.plan", req, {
+      adminId: req.user.id,
+      businessId: business._id,
+      plan: business.plan,
+    });
+  }
 
   res.status(200).json({
     success: true,
@@ -82,15 +99,21 @@ const getPlatformStats = async (req, res) => {
 const getBusinessStats = async (req, res) => {
   const businessId = new mongoose.Types.ObjectId(req.validated.params.id);
 
+  const [stats, usage] = await Promise.all([
+    notificationService.getStats({ business: businessId }),
+    usageService.getUsage(businessId),
+  ]);
+
   res.status(200).json({
     success: true,
-    stats: await notificationService.getStats({ business: businessId }),
+    stats,
+    usage,
   });
 };
 
 module.exports = {
   listBusinesses,
-  updateBusinessStatus,
+  updateBusiness,
   getAllNotifications,
   getPlatformStats,
   getBusinessStats,

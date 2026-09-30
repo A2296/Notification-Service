@@ -5,9 +5,11 @@ const router = express.Router();
 const businessAuth = require("../middleware/businessAuth");
 const { businessLimiter } = require("../middleware/rateLimiters");
 const { getSupport } = require("../controllers/supportController");
+const { listPlans } = require("../controllers/planController");
 
 // Public + dashboard
 router.get("/support", getSupport);
+router.get("/plans", listPlans);
 router.use("/auth", require("./authRoutes"));
 router.use("/account", require("./accountRoutes"));
 router.use("/api-keys", require("./apiKeyRoutes"));

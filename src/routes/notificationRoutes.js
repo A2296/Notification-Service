@@ -18,6 +18,7 @@ const {
   markAsRead,
   retryNotification,
   getStats,
+  getUsage,
 } = require("../controllers/notificationController");
 
 // Mounted behind businessAuth (API key or dashboard JWT)
@@ -34,6 +35,8 @@ router.post(
 router.get("/", validate({ query: listNotificationsQuery }), listNotifications);
 
 router.get("/stats", getStats);
+
+router.get("/usage", getUsage);
 
 router.get("/:id", validate({ params: idParams }), getNotificationById);
 

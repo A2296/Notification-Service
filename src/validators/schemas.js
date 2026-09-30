@@ -1,5 +1,6 @@
 const { z } = require("zod");
 const { CHANNELS, STATUSES } = require("../models/notificationSchema");
+const { PLAN_IDS } = require("../models/businessSchema");
 const { FREQUENCIES, isValidTimeZone } = require("../utils/recurrence");
 
 const text = (max) => z.string().trim().min(1).max(max);
@@ -354,11 +355,17 @@ const idParams = z.object({ id: objectId });
 const listBusinessesQuery = z.object({
   ...pagination,
   status: z.enum(["ACTIVE", "SUSPENDED"]).optional(),
+  plan: z.enum(PLAN_IDS).optional(),
 });
 
-const updateBusinessBody = z.object({
-  status: z.enum(["ACTIVE", "SUSPENDED"]),
-});
+const updateBusinessBody = z
+  .object({
+    status: z.enum(["ACTIVE", "SUSPENDED"]).optional(),
+    plan: z.enum(PLAN_IDS).optional(),
+  })
+  .refine((body) => body.status !== undefined || body.plan !== undefined, {
+    message: "Provide status, plan or both",
+  });
 
 const adminNotificationsQuery = listNotificationsQuery.extend({
   businessId: objectId.optional(),

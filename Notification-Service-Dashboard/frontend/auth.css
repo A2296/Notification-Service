@@ -1,7 +1,8 @@
 .topbar-actions {
   display:flex;
   align-items:center;
-  gap:10px
+  gap:10px;
+  flex:none
 }
 .account-button {
   border:1px solid #dbe5e7;
@@ -10,7 +11,11 @@
   border-radius:20px;
   padding:8px 13px;
   font:700 12px Manrope,Arial,sans-serif;
-  cursor:pointer
+  cursor:pointer;
+  max-width:260px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap
 }
 .form-error {
   min-height:16px;

@@ -65,8 +65,12 @@ const state = {
   apiKeys: [],
   schedules: [],
   settings: null,
-  // Public support contact for this deployment (same for every visitor)
+  // Public support contact and plan list for this deployment (same for every visitor)
   support: null,
+  plans: null,
+  plansFailed: false,
+  // This business's plan and notifications used this month
+  usage: null,
   // Between the password and the two-factor code; kept in memory only
   mfaToken: null,
   // Which part of the two-factor setup is showing (null = based on the account)
@@ -88,6 +92,11 @@ class ApiError extends Error {
 }
 
 function describeError(data, status) {
+  // The monthly plan limit explains itself; the per-minute limits get the generic message
+  if (data.code === 'MONTHLY_LIMIT_REACHED' && typeof data.message === 'string') {
+    return data.message;
+  }
+
   if (status === 429) {
     return 'Too many requests. Please wait a moment and try again.';
   }
@@ -611,6 +620,9 @@ function hideSecret() {
 const hasBusiness = () => Boolean(state.user?.business);
 
 async function refreshDashboard() {
+  // Also refreshed after every send, so the usage strip stays current
+  loadUsage();
+
   if (state.mode === 'demo') {
     renderStats(statsFrom(state.demo));
     renderTable('#recentActivity', '#emptyRecent', state.demo.slice(0, 5), notificationRow);
@@ -718,11 +730,11 @@ function refreshView(view = state.view) {
   }
 
   if (view === 'settings') {
-    return loadSettings();
+    return Promise.all([loadSettings(), loadUsage(), loadPlans()]);
   }
 
   if (view === 'help') {
-    return loadSupport();
+    return Promise.all([loadSupport(), loadPlans()]);
   }
 
   return refreshDashboard();
@@ -730,18 +742,25 @@ function refreshView(view = state.view) {
 
 function setView(view) {
   const next = view === 'dashboard' || TITLES[view] ? view : 'dashboard';
+  const changed = next !== state.view;
   state.view = next;
 
+  // Sections are "view-<name>", so a #<name> link never makes the browser jump past the top bar
   document
     .querySelectorAll('.view')
-    .forEach((section) => section.classList.toggle('active-view', section.id === next));
+    .forEach((section) => section.classList.toggle('active-view', section.id === `view-${next}`));
+
+  // A new page starts at its top
+  if (changed) {
+    window.scrollTo(0, 0);
+  }
 
   document
     .querySelectorAll('[data-view]')
     .forEach((link) => link.classList.toggle('active', link.dataset.view === next));
 
   el('#pageTitle').textContent = next === 'dashboard' ? greeting() : TITLES[next];
-  el('.sidebar').classList.remove('open');
+  setMenuOpen(false);
   history.replaceState(null, '', `#${next}`);
 
   if (state.mode !== 'loading') {
@@ -756,7 +775,8 @@ function setSignedIn(user) {
 
   const account = el('#accountButton');
   account.textContent = user.email;
-  account.title = 'Your profile';
+  // The button may cut a long email short on small screens
+  account.title = `Your profile (${user.email})`;
 
   setConnection(user.business ? 'API connected' : 'Admin account', true);
 
@@ -772,6 +792,7 @@ function setSignedOut() {
   state.apiKeys = [];
   state.schedules = [];
   state.settings = null;
+  state.usage = null;
   state.mfaStep = null;
 
   const account = el('#accountButton');
@@ -787,6 +808,7 @@ function setSignedOut() {
   renderSchedules();
   renderProfile();
   renderSettings();
+  renderUsage();
   el('#pageTitle').textContent =
     state.view === 'dashboard' ? greeting() : TITLES[state.view];
 }
@@ -1339,7 +1361,8 @@ function describeLastRun(lastRun) {
     return `Last run skipped: ${lastRun.skipped}`;
   }
 
-  const failed = lastRun.failed ? `, ${lastRun.failed} failed` : '';
+  const reason = lastRun.reason ? ` (${excerpt(lastRun.reason, 60)})` : '';
+  const failed = lastRun.failed ? `, ${lastRun.failed} failed${reason}` : '';
   return `Last run ${formatDate(lastRun.at)} · ${lastRun.accepted} sent${failed}`;
 }
 
@@ -1626,7 +1649,10 @@ async function runScheduleNow(schedule, button) {
     const result = await callApi(`/schedules/${encodeURIComponent(schedule.id)}/run`, {
       method: 'POST'
     });
-    const failed = result.failed ? `, ${result.failed} could not be created` : '';
+    const reason = result.schedule?.lastRun?.reason;
+    const failed = result.failed
+      ? `, ${result.failed} could not be created${reason ? ` (${excerpt(reason, 60)})` : ''}`
+      : '';
     showToast(`"${schedule.name}": ${result.accepted} notifications queued${failed}.`);
     await loadSchedules();
   } catch (error) {
@@ -2068,6 +2094,166 @@ async function disableMfa(event) {
   }
 }
 
+// ---- Plan & usage ----
+
+const DEMO_PLANS = [
+  { id: 'FREE', name: 'Free', description: 'For trying NotifyFlow and small projects', monthlyNotifications: 1000 },
+  { id: 'STARTER', name: 'Starter', description: 'For growing products with regular traffic', monthlyNotifications: 10000 },
+  { id: 'PRO', name: 'Pro', description: 'For high-volume senders', monthlyNotifications: 100000 }
+];
+
+function demoUsage() {
+  const now = new Date();
+  const limit = DEMO_PLANS[0].monthlyNotifications;
+  const used = state.demo.length;
+
+  return {
+    plan: DEMO_PLANS[0],
+    limit,
+    used,
+    remaining: Math.max(limit - used, 0),
+    resetsAt: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString()
+  };
+}
+
+// Usage resets at midnight UTC on the 1st, so the date is shown in UTC
+const formatResetDay = (value) =>
+  new Date(value).toLocaleDateString([], { day: 'numeric', month: 'long', timeZone: 'UTC' });
+
+const perMonth = (count) => `${count.toLocaleString()} notifications a month`;
+
+function describeUsage(usage) {
+  if (!usage) {
+    if (state.user && !hasBusiness()) {
+      return { text: 'Platform admin accounts have no plan or usage.', level: '' };
+    }
+    return { text: state.user ? 'Usage is not available right now.' : 'Sign in to see your usage.', level: '' };
+  }
+
+  const resets = formatResetDay(usage.resetsAt);
+
+  if (usage.remaining <= 0) {
+    return {
+      text: `Limit reached: ${usage.used.toLocaleString()} of ${usage.limit.toLocaleString()} used. New notifications are refused until ${resets}.`,
+      level: 'full'
+    };
+  }
+
+  return {
+    text: `${usage.used.toLocaleString()} of ${usage.limit.toLocaleString()} notifications used this month · ${usage.remaining.toLocaleString()} left · resets ${resets}`,
+    level: usage.used / usage.limit >= 0.8 ? 'high' : ''
+  };
+}
+
+function renderUsageBar(bar, usage, level) {
+  bar.max = usage ? Math.max(usage.limit, 1) : 1;
+  bar.value = usage ? Math.min(usage.used, usage.limit) : 0;
+  bar.classList.toggle('high', level === 'high');
+  bar.classList.toggle('full', level === 'full');
+}
+
+function renderUsage() {
+  const usage = state.usage || (state.mode === 'demo' ? demoUsage() : null);
+  const { text, level } = describeUsage(usage);
+
+  el('#overviewPlanName').textContent = usage ? `${usage.plan.name.toUpperCase()} PLAN` : 'YOUR PLAN';
+  el('#overviewUsageText').textContent = text;
+  el('#settingsUsageText').textContent = text;
+  renderUsageBar(el('#overviewUsageBar'), usage, level);
+  renderUsageBar(el('#settingsUsageBar'), usage, level);
+
+  const badge = el('#planBadge');
+  badge.textContent = usage ? usage.plan.name : '';
+  badge.className = 'status active';
+  el('#planSummary').textContent = usage ? perMonth(usage.limit) : '';
+  // Nothing to show until there is a plan (signed out, or a platform admin)
+  badge.parentElement.classList.toggle('hidden', !usage);
+  el('#settingsUsageBar').classList.toggle('hidden', !usage);
+  el('#overviewUsageBar').classList.toggle('hidden', !usage);
+
+  renderPlans();
+}
+
+function renderPlans() {
+  const plans = state.plans || (state.mode === 'demo' ? DEMO_PLANS : null);
+  const current = (state.usage || (state.mode === 'demo' ? demoUsage() : null))?.plan.id;
+
+  if (!plans) {
+    const text = state.plansFailed ? 'Plans could not be loaded.' : 'Loading plans…';
+    el('#helpPlans').replaceChildren(createElement('p', { className: 'subtle', text }));
+    el('#planList').replaceChildren(createElement('li', { className: 'subtle', text }));
+    return;
+  }
+
+  el('#helpPlans').replaceChildren(
+    ...plans.map((plan) => {
+      const card = createElement('article', { className: `plan-tile${plan.id === current ? ' current' : ''}` });
+      card.append(
+        createElement('h4', { text: plan.name }),
+        createElement('strong', { text: perMonth(plan.monthlyNotifications) }),
+        createElement('p', { className: 'subtle', text: plan.description })
+      );
+
+      if (plan.id === current) {
+        card.append(createElement('span', { className: 'status active', text: 'Your plan' }));
+      }
+
+      return card;
+    })
+  );
+
+  el('#planList').replaceChildren(
+    ...plans.map((plan) => {
+      const item = document.createElement('li');
+      const text = document.createElement('span');
+
+      text.append(
+        createElement('strong', { text: plan.name }),
+        createElement('span', { className: 'row-note', text: perMonth(plan.monthlyNotifications) })
+      );
+      item.append(text);
+
+      if (plan.id === current) {
+        item.append(createElement('span', { className: 'status active', text: 'current' }));
+      }
+
+      return item;
+    })
+  );
+}
+
+// Public, so the Help page can list the plans before anyone signs in
+async function loadPlans() {
+  if (state.mode === 'live' && !state.plans) {
+    try {
+      const { plans } = await request(`${API_BASE}/plans`);
+      state.plans = plans;
+      state.plansFailed = false;
+    } catch {
+      state.plansFailed = true;
+    }
+  }
+
+  renderPlans();
+}
+
+async function loadUsage() {
+  if (state.mode !== 'live' || !hasBusiness()) {
+    state.usage = null;
+    renderUsage();
+    return;
+  }
+
+  try {
+    const { usage } = await callApi('/notifications/usage');
+    state.usage = usage;
+  } catch {
+    state.usage = null;
+  }
+
+  renderUsage();
+}
+
 // ---- Help & support ----
 
 function supportLink(className, text, href) {
@@ -2142,6 +2328,14 @@ function savePreferences(changes) {
   } catch {
     // Storage unavailable (e.g. private browsing): the choice just is not remembered
   }
+}
+
+// The slide-in sidebar on phones
+function setMenuOpen(open) {
+  el('.sidebar').classList.toggle('open', open);
+  // The page behind the open drawer stays still
+  document.body.classList.toggle('menu-open', open);
+  el('#menuButton').setAttribute('aria-expanded', String(open));
 }
 
 function setSidebarCollapsed(collapsed) {
@@ -2239,8 +2433,41 @@ document.querySelectorAll('[data-go-to]').forEach((button) =>
 window.addEventListener('hashchange', () => setView(location.hash.slice(1)));
 
 el('#menuButton').addEventListener('click', () =>
-  el('.sidebar').classList.toggle('open')
+  setMenuOpen(!el('.sidebar').classList.contains('open'))
 );
+
+// On phones the open sidebar covers the menu button: a tap outside it closes it, and that
+// tap is not passed on to whatever is underneath (so it cannot press a button by accident)
+document.addEventListener(
+  'click',
+  (event) => {
+    const sidebar = el('.sidebar');
+    const menuButton = el('#menuButton');
+    const isDrawer = getComputedStyle(menuButton).display !== 'none';
+
+    if (!sidebar.classList.contains('open')) {
+      return;
+    }
+
+    if (!isDrawer) {
+      setMenuOpen(false);
+      return;
+    }
+
+    if (!sidebar.contains(event.target) && !menuButton.contains(event.target)) {
+      event.preventDefault();
+      event.stopPropagation();
+      setMenuOpen(false);
+    }
+  },
+  true
+);
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    setMenuOpen(false);
+  }
+});
 
 el('#accountButton').addEventListener('click', () => {
   if (state.user) {
@@ -2375,7 +2602,7 @@ async function init() {
 
     // A shared link to the Help page opens it without the sign-in dialog on top
     if (state.view === 'help') {
-      loadSupport();
+      refreshView('help');
     } else {
       openAuthDialog();
     }

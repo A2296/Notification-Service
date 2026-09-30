@@ -28,6 +28,26 @@ const config = {
     url: process.env.SUPPORT_URL || null,
   },
 
+  // Subscription plans: notifications a business may create per calendar month (UTC).
+  // Assigned by a platform admin (there are no payments); every business starts on FREE.
+  plans: {
+    FREE: {
+      name: "Free",
+      description: "For trying NotifyFlow and small projects",
+      monthlyNotifications: Number(process.env.PLAN_FREE_MONTHLY_LIMIT) || 1000,
+    },
+    STARTER: {
+      name: "Starter",
+      description: "For growing products with regular traffic",
+      monthlyNotifications: Number(process.env.PLAN_STARTER_MONTHLY_LIMIT) || 10000,
+    },
+    PRO: {
+      name: "Pro",
+      description: "For high-volume senders",
+      monthlyNotifications: Number(process.env.PLAN_PRO_MONTHLY_LIMIT) || 100000,
+    },
+  },
+
   schedules: {
     // Recurring schedules a business may have (each sends to up to 100 recipients per run)
     maxPerBusiness: Number(process.env.MAX_SCHEDULES) || 20,

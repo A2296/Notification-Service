@@ -97,11 +97,11 @@ const deleteSchedule = async (req, res) => {
 
 const runScheduleNow = async (req, res) => {
   const schedule = await findSchedule(req);
-  const { accepted, failed } = await scheduleService.runNow(schedule);
+  const { accepted, failed, reason } = await scheduleService.runNow(schedule);
 
   res.status(accepted > 0 ? 202 : 422).json({
     success: accepted > 0,
-    message: `${accepted} notifications accepted${failed ? `, ${failed} could not be created` : ""}`,
+    message: `${accepted} notifications accepted${failed ? `, ${failed} could not be created (${reason})` : ""}`,
     accepted,
     failed,
     schedule,
