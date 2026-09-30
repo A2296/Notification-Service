@@ -7,7 +7,7 @@ The dashboard is dependency-free: it is built with standard HTML, CSS, and JavaS
 ## Features
 
 - Business registration and sign-in; sign-out ends the session on the server
-- Overview of total, sent/delivered, in-progress, and failed notifications, plus the in-app read rate (how many delivered in-app messages your app has marked read)
+- Overview of total, sent/delivered, in-progress, and failed notifications, plus the in-app read rate (how many delivered in-app messages your app has marked read) and this month's plan usage (amber near the limit, red when it is reached)
 - Notification composer for email, SMS, and in-app channels, with per-channel validation
 - Bulk mode: send one message to up to 100 recipients at once, with per-recipient results
 - Duplicate-send protection: a retried send reuses its `Idempotency-Key`
@@ -16,10 +16,13 @@ The dashboard is dependency-free: it is built with standard HTML, CSS, and JavaS
 - **Send later**: schedule a one-off notification for a date and time
 - **Schedules**: recurring sends (daily, weekly on chosen days, or monthly) at a local time in any timezone, with pause, resume, run now and delete
 - **Profile** (top-right account button): who is signed in, their business, member since, last sign-in and two-factor status
-- **Settings**: business details, password change, two-factor authentication (QR code, recovery codes), sign out everywhere, delivery channel status, API base URL and documentation, limits
-- **Help & support**: what NotifyFlow is, getting-started steps, FAQ and the support contact set by the operator; open to visitors who are not signed in (`/#help`), and linked from the sign-in dialog
+- **Settings**: business details, plan and usage (with the plans on offer), password change, two-factor authentication (QR code, recovery codes), sign out everywhere, delivery channel status, API base URL and documentation, limits
+- **Help & support**: what NotifyFlow is, getting-started steps, the plans on offer, FAQ and the support contact set by the operator; open to visitors who are not signed in (`/#help`), and linked from the sign-in dialog
+- A clear message when the plan's monthly limit is reached (sends, bulk sends and schedule runs)
 - Two-step sign-in when two-factor authentication is on
 - Collapsible sidebar; the choice is remembered in this browser
+- On phones the sidebar is a drawer: a tap outside it or Escape closes it (without pressing what is underneath) and the page behind it stays still; on short screens the sidebar scrolls
+- Every page opens at its top (links like `/#settings` never scroll past the top bar), and long business names or emails are shortened with "…" instead of widening the page
 - API key management: generate (the secret is shown once), list, and revoke keys
 - Ready-to-run `curl` example using your key ID and the service's real URL
 - Demo mode with sample data when the page is opened without the API
@@ -70,7 +73,9 @@ All paths are relative to the page's own origin. The full reference is at `/docs
 | Register business | `POST /api/v1/auth/register` |
 | Sign in | `POST /api/v1/auth/login` |
 | Sign out | `POST /api/v1/auth/logout` |
-| Overview counts | `GET /api/v1/notifications/stats` |
+| Overview counts and read rate | `GET /api/v1/notifications/stats` |
+| Plan usage this month | `GET /api/v1/notifications/usage` |
+| Plans on offer | `GET /api/v1/plans` (public) |
 | Activity | `GET /api/v1/notifications?limit=50&search=…&status=…` |
 | Send notification | `POST /api/v1/notifications` (with an `Idempotency-Key` header) |
 | Send in bulk | `POST /api/v1/notifications/bulk` (with an `Idempotency-Key` header) |
