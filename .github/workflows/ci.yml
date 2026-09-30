@@ -42,3 +42,69 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t notification-service .
+
+  # Automatic deploy of main to Render. The Render service was created from the repository's
+  # public URL, and Render cannot auto-deploy those, so CI does it: once the tests and the
+  # Docker build pass, it calls the service's deploy hook for this exact commit, then waits
+  # until /health reports that commit (or a newer one) as live.
+  # Setup (once): docs/DEPLOYMENT.md, "Automatic deploys".
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [test, docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 25
+    # One deploy at a time, in merge order
+    concurrency:
+      group: render-deploy
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: ${{ vars.RENDER_SERVICE_URL || 'https://notifyflow-labu.onrender.com' }}
+    env:
+      SITE: ${{ vars.RENDER_SERVICE_URL || 'https://notifyflow-labu.onrender.com' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Start the Render deploy of this commit
+        env:
+          DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$DEPLOY_HOOK" ]; then
+            echo "::error::The RENDER_DEPLOY_HOOK_URL secret is not set, so main was not deployed. See docs/DEPLOYMENT.md (Automatic deploys)."
+            exit 1
+          fi
+          # 200: deploy started; 202: queued behind a deploy that is already running
+          curl --fail --silent --show-error --max-time 30 -X POST "${DEPLOY_HOOK}&ref=${GITHUB_SHA}" > /dev/null
+          echo "Deploy of ${GITHUB_SHA} requested."
+
+      - name: Wait until this commit is live
+        run: |
+          # Render builds the image, then switches traffic once /health passes. This takes a few
+          # minutes (longer if the free instance was asleep).
+          for _ in $(seq 1 60); do
+            live=$(curl --silent --max-time 60 "$SITE/health" \
+              | jq -r 'if has("commit") then (.commit // "unset") else "none" end' 2>/dev/null || true)
+
+            if [ "$live" = "unset" ]; then
+              echo "::warning::$SITE is up but does not report its commit (RENDER_GIT_COMMIT is not set), so the new version cannot be confirmed. Check the deploy in the Render dashboard."
+              exit 0
+            fi
+
+            if [ -n "$live" ] && [ "$live" != "none" ]; then
+              git fetch --quiet origin main || true
+              # This commit, or a later one that contains it (a newer merge deployed first)
+              if [ "$live" = "$GITHUB_SHA" ] || git merge-base --is-ancestor "$GITHUB_SHA" "$live" 2>/dev/null; then
+                echo "Live on $SITE: $live"
+                echo "Deployed \`${GITHUB_SHA::7}\` to $SITE" >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+            fi
+
+            echo "Waiting for ${GITHUB_SHA::7} (live now: ${live:-no answer})"
+            sleep 15
+          done
+
+          echo "::error::${GITHUB_SHA::7} was not live on $SITE after 15 minutes. The build or health check may have failed; see the deploy logs in the Render dashboard."
+          exit 1

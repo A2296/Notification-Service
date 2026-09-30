@@ -30,8 +30,34 @@ The service is one Docker container plus a MongoDB database. This guide deploys 
 5. Open `https://<service-name>.onrender.com/docs`. You should see the API documentation.
    The business dashboard is at `https://<service-name>.onrender.com/`.
 
-Every push to `main` redeploys automatically. CI (`.github/workflows/ci.yml`) runs the tests
-on every pull request, so merge only when CI is green.
+CI (`.github/workflows/ci.yml`) runs the tests on every pull request, so merge only when CI is
+green.
+
+### Automatic deploys
+
+Every merge to `main` is deployed by GitHub Actions, not by Render itself. (Render cannot
+auto-deploy a service created from a public repository URL, which is how the live demo was set
+up.) After the tests and the Docker build pass on `main`, the `deploy` job:
+
+1. calls the service's **deploy hook** for that exact commit, then
+2. waits until `GET /health` reports that commit as live (`"commit"` comes from Render's
+   `RENDER_GIT_COMMIT`), and fails with a clear error if it is not live within 15 minutes.
+
+The run appears under the repository's **Deployments → production**. Set it up once:
+
+1. **Render** (the account that owns the service): open the service → **Settings** →
+   **Deploy Hook** → copy the URL. Treat it like a password: anyone with it can start a deploy.
+2. **GitHub** (a repository admin): **Settings → Secrets and variables → Actions → New
+   repository secret**, name `RENDER_DEPLOY_HOOK_URL`, value the URL from step 1. Or from a
+   terminal: `gh secret set RENDER_DEPLOY_HOOK_URL --repo A2296/Notification-Service`.
+3. Optional: if the service has another address, add a repository **variable**
+   `RENDER_SERVICE_URL` (for example `https://notifyflow-labu.onrender.com`).
+4. In Render, set the service's **Auto-Deploy** to **Off** so a later GitHub connection
+   cannot deploy the same commit twice.
+
+Until the secret exists, the `deploy` job fails on `main` with a message pointing here, so an
+undeployed merge is never silent. To deploy by hand (for example to roll back), use
+**Manual Deploy** in the Render dashboard.
 
 ## 3. Create the platform admin
 

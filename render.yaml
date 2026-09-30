@@ -6,7 +6,9 @@ services:
     runtime: docker
     plan: free
     branch: main
-    autoDeploy: true
+    # GitHub Actions deploys main through the deploy hook once CI passes (docs/DEPLOYMENT.md,
+    # "Automatic deploys"), so Render's own auto-deploy is off to avoid deploying twice
+    autoDeploy: false
     healthCheckPath: /health
     envVars:
       # MongoDB Atlas connection string (free M0 cluster works)

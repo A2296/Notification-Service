@@ -11,6 +11,17 @@ test("health check reports database connected", async () => {
   const res = await request(app).get("/health");
   assert.equal(res.status, 200);
   assert.equal(res.body.database, "connected");
+  assert.equal(res.body.commit, null);
+});
+
+test("health check reports the deployed commit when Render provides it", async () => {
+  process.env.RENDER_GIT_COMMIT = "34b3cc7a1d0e5f6a7b8c9d0e1f2a3b4c5d6e7f80";
+  try {
+    const res = await request(app).get("/health");
+    assert.equal(res.body.commit, "34b3cc7a1d0e5f6a7b8c9d0e1f2a3b4c5d6e7f80");
+  } finally {
+    delete process.env.RENDER_GIT_COMMIT;
+  }
 });
 
 test("register creates a business and returns a dashboard token", async () => {
