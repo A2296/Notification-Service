@@ -13,7 +13,7 @@ const {
 } = require("../validators/schemas");
 const {
   listBusinesses,
-  updateBusinessStatus,
+  updateBusiness,
   getAllNotifications,
   getPlatformStats,
   getBusinessStats,
@@ -26,7 +26,7 @@ router.get("/businesses", validate({ query: listBusinessesQuery }), listBusiness
 router.patch(
   "/businesses/:id",
   validate({ params: idParams, body: updateBusinessBody }),
-  updateBusinessStatus
+  updateBusiness
 );
 
 router.get("/businesses/:id/stats", validate({ params: idParams }), getBusinessStats);

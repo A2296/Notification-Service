@@ -41,6 +41,8 @@ app.get("/health", (req, res) => {
   res.status(dbConnected ? 200 : 503).json({
     status: dbConnected ? "ok" : "degraded",
     database: dbConnected ? "connected" : "disconnected",
+    // The deployed Git commit (set by Render), so CI can confirm which version is live
+    commit: process.env.RENDER_GIT_COMMIT || null,
   });
 });
 

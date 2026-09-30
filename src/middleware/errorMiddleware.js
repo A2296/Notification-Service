@@ -1,3 +1,5 @@
+const HttpError = require("../utils/httpError");
+
 const errorMiddleware = (err, req, res, next) => {
   // Malformed JSON body
   if (err.type === "entity.parse.failed") {
@@ -32,6 +34,8 @@ const errorMiddleware = (err, req, res, next) => {
   res.status(status).json({
     success: false,
     message: status >= 500 ? "Internal Server Error" : err.message,
+    // Only our own client errors carry a reason code (never driver or system error codes)
+    ...(status < 500 && err instanceof HttpError && err.code ? { code: err.code } : {}),
   });
 };
 

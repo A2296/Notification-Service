@@ -2,6 +2,7 @@ const Notification = require("../models/notificationSchema");
 const Recipient = require("../models/recipientSchema");
 const HttpError = require("../utils/httpError");
 const config = require("../config");
+const usageService = require("./usageService");
 
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 
@@ -63,7 +64,31 @@ const initialSchedule = (scheduledAt) => {
 const findByIdempotencyKey = (businessId, idempotencyKey) =>
   Notification.findOne({ business: businessId, idempotencyKey });
 
-const createNotification = async ({ businessId, input, idempotencyKey }) => {
+// Monthly plan limit. A single send checks it on its own; a bulk request or schedule run
+// checks it once and shares a `budget` between its items (so its items cannot race past it).
+const reserveQuota = async (businessId, budget) => {
+  if (!budget) {
+    const usage = await usageService.getUsage(businessId);
+    if (usage.remaining <= 0) {
+      throw usageService.limitReachedError(usage);
+    }
+    return;
+  }
+
+  if (budget.remaining <= 0) {
+    throw usageService.limitReachedError(budget.usage);
+  }
+  budget.remaining -= 1;
+};
+
+const releaseQuota = (budget) => {
+  if (budget) {
+    budget.remaining += 1;
+  }
+};
+
+const createNotification = async ({ businessId, input, idempotencyKey, budget }) => {
+  // A repeated request returns the original, even when the limit has been reached since
   if (idempotencyKey) {
     const existing = await findByIdempotencyKey(businessId, idempotencyKey);
     if (existing) {
@@ -71,6 +96,22 @@ const createNotification = async ({ businessId, input, idempotencyKey }) => {
     }
   }
 
+  await reserveQuota(businessId, budget);
+
+  try {
+    const result = await insertNotification({ businessId, input, idempotencyKey });
+    // Lost an Idempotency-Key race: nothing new was created
+    if (!result.created) {
+      releaseQuota(budget);
+    }
+    return result;
+  } catch (error) {
+    releaseQuota(budget);
+    throw error;
+  }
+};
+
+const insertNotification = async ({ businessId, input, idempotencyKey }) => {
   const { recipient } = input;
   const recipientDoc = recipient.id
     ? await upsertRecipient(businessId, recipient.id, pickContact(recipient))
@@ -112,8 +153,11 @@ const BULK_CONCURRENCY = 10;
 // Bulk send: each item is created independently, so one bad recipient does not stop the
 // rest. A request-level Idempotency-Key becomes "<key>:<index>" per item, so repeating
 // the whole request returns the original notifications instead of sending twice.
+// Items over the monthly limit are reported like any other item that could not be created.
 const createNotifications = async ({ businessId, inputs, idempotencyKey }) => {
   const results = [];
+  const usage = await usageService.getUsage(businessId);
+  const budget = { usage, remaining: usage.remaining };
 
   for (let start = 0; start < inputs.length; start += BULK_CONCURRENCY) {
     const batch = inputs.slice(start, start + BULK_CONCURRENCY);
@@ -123,6 +167,7 @@ const createNotifications = async ({ businessId, inputs, idempotencyKey }) => {
           businessId,
           input,
           idempotencyKey: idempotencyKey && `${idempotencyKey}:${start + offset}`,
+          budget,
         })
       )
     );

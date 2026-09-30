@@ -34,7 +34,11 @@ body {
   flex-direction:column;
   position:sticky;
   height:100vh;
-  top:0
+  top:0;
+  /* Short windows (small laptops, phones in landscape) can still reach every link */
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain
 }
 .brand {
   color:#fff;
@@ -172,7 +176,17 @@ body {
   height:108px;
   display:flex;
   align-items:center;
-  justify-content:space-between
+  justify-content:space-between;
+  gap:16px
+}
+/* Long business names and emails are cut with "…" instead of widening the page */
+.topbar>div:first-of-type {
+  min-width:0
+}
+.topbar h1 {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap
 }
 .eyebrow {
   color:var(--teal-dark);
@@ -579,9 +593,94 @@ td strong {
 .full-span {
   grid-column:1/-1
 }
+.usage-card {
+  display:grid;
+  gap:12px;
+  padding:18px 25px;
+  margin-bottom:23px
+}
+.usage-head {
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px 12px
+}
+.usage-head .eyebrow {
+  margin:0 0 4px
+}
+.usage-text {
+  margin:0;
+  color:#43545e;
+  font-size:13px
+}
+.usage-bar {
+  -webkit-appearance:none;
+  appearance:none;
+  display:block;
+  width:100%;
+  height:8px;
+  border:0;
+  border-radius:8px;
+  background:#e8eeef;
+  overflow:hidden
+}
+.usage-bar::-webkit-progress-bar {
+  background:#e8eeef;
+  border-radius:8px
+}
+.usage-bar::-webkit-progress-value {
+  background:var(--teal);
+  border-radius:8px
+}
+.usage-bar::-moz-progress-bar {
+  background:var(--teal);
+  border-radius:8px
+}
+.usage-bar.high::-webkit-progress-value {
+  background:#e0a53a
+}
+.usage-bar.high::-moz-progress-bar {
+  background:#e0a53a
+}
+.usage-bar.full::-webkit-progress-value {
+  background:var(--coral)
+}
+.usage-bar.full::-moz-progress-bar {
+  background:var(--coral)
+}
+.plan-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));
+  gap:14px
+}
+.plan-tile {
+  display:grid;
+  gap:6px;
+  align-content:start;
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:16px
+}
+.plan-tile.current {
+  border-color:var(--teal);
+  box-shadow:inset 0 0 0 1px var(--teal)
+}
+.plan-tile h4 {
+  margin:0;
+  font-size:15px
+}
+.plan-tile strong {
+  color:var(--teal-dark);
+  font-size:13px
+}
+.plan-tile .status {
+  justify-self:start
+}
 .inline-link {
   color:var(--teal-dark);
-  font-weight:800
+  font-weight:800;
+  white-space:nowrap
 }
 .help-view .settings-grid {
   grid-template-columns:repeat(2,minmax(0,1fr))
@@ -934,7 +1033,9 @@ dialog label {
   transform:translateY(90px);
   opacity:0;
   transition:.25s;
-  box-shadow:var(--shadow)
+  box-shadow:var(--shadow);
+  /* Informational only: never blocks a click on what is underneath */
+  pointer-events:none
 }
 .toast.show {
   transform:translateY(0);
@@ -983,8 +1084,13 @@ dialog label {
     transition:.2s;
     width:248px
   }
+  body.menu-open {
+    overflow:hidden
+  }
   .sidebar.open {
-    transform:translateX(0)
+    transform:translateX(0);
+    /* Dims the page; a tap there closes the drawer */
+    box-shadow:0 0 0 100vmax rgba(8,28,39,.45)
   }
   .main-content {
     padding:0 16px 28px
@@ -1001,11 +1107,26 @@ dialog label {
     padding:5px;
     margin-right:8px
   }
+  .topbar {
+    gap:8px
+  }
   .topbar>div:first-of-type {
     margin-right:auto
   }
+  .topbar h1 {
+    font-size:18px
+  }
+  /* More specific than auth.css (loaded later), so phones get the shorter button */
+  .topbar-actions .account-button {
+    max-width:110px
+  }
+  /* Just the status dot on phones; the text stays available to screen readers */
   .connection-pill {
-    font-size:10px
+    font-size:0;
+    padding:8px
+  }
+  .connection-pill span {
+    margin-right:0
   }
   .hero-card {
     display:block;

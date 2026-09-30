@@ -119,6 +119,17 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
     RateLimited:
       description: Too many requests
+    RateOrMonthlyLimited:
+      description: |
+        Too many requests this minute, or the plan's **monthly notification limit** is used up.
+        The monthly case has `code: MONTHLY_LIMIT_REACHED` and says when the limit resets.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            success: false
+            code: MONTHLY_LIMIT_REACHED
+            message: "Monthly notification limit reached: the Free plan includes 1,000 notifications per month. It resets on 1 October."
 
   schemas:
     Error:
@@ -126,6 +137,9 @@ components:
       properties:
         success: { type: boolean, example: false }
         message: { type: string }
+        code:
+          type: string
+          description: Machine-readable reason, when there is one (e.g. `MONTHLY_LIMIT_REACHED`)
         errors:
           type: array
           items:
@@ -304,6 +318,27 @@ components:
             delivered: { type: integer }
             read: { type: integer }
 
+    Plan:
+      type: object
+      properties:
+        id: { type: string, enum: [FREE, STARTER, PRO] }
+        name: { type: string, example: Free }
+        description: { type: string }
+        monthlyNotifications: { type: integer, example: 1000 }
+
+    Usage:
+      type: object
+      description: |
+        Notifications created this calendar month (UTC) against the plan's limit. Retries and
+        repeated (idempotent) requests create nothing new, so they do not count.
+      properties:
+        plan: { $ref: "#/components/schemas/Plan" }
+        limit: { type: integer, example: 1000 }
+        used: { type: integer, example: 240 }
+        remaining: { type: integer, example: 760 }
+        periodStart: { type: string, format: date-time }
+        resetsAt: { type: string, format: date-time }
+
 security:
   - ApiKey: []
     ApiSecret: []
@@ -341,6 +376,27 @@ paths:
                     properties:
                       email: { type: string, format: email, nullable: true }
                       url: { type: string, format: uri, nullable: true }
+
+  /api/v1/plans:
+    get:
+      tags: [System]
+      summary: Plans on offer and their monthly notification limits
+      description: |
+        Public. Every business starts on `FREE`; a platform admin changes a business's plan
+        with `PATCH /api/v1/admin/businesses/{id}`. There are no payments.
+      security: []
+      responses:
+        "200":
+          description: Plans
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  plans:
+                    type: array
+                    items: { $ref: "#/components/schemas/Plan" }
 
   /api/v1/auth/register:
     post:
@@ -687,7 +743,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { description: Recipient has no address for this channel }
-        "429": { $ref: "#/components/responses/RateLimited" }
+        "429": { $ref: "#/components/responses/RateOrMonthlyLimited" }
     get:
       tags: [Notifications]
       summary: List your notifications
@@ -743,6 +799,8 @@ paths:
           channel) has an `error` instead of a `notification`. **422** if none could be created.
         - With `Idempotency-Key`, repeating the request returns the original notifications
           (`created: false`) instead of sending twice.
+        - Items beyond the plan's monthly limit get an `error` ("Monthly notification limit
+          reached…"); the items before them are accepted.
 
         Bulk requests have their own per-business limit (10 per minute by default).
       parameters:
@@ -813,6 +871,21 @@ paths:
                 properties:
                   success: { type: boolean }
                   stats: { $ref: "#/components/schemas/Stats" }
+
+  /api/v1/notifications/usage:
+    get:
+      tags: [Notifications]
+      summary: Your plan and notifications used this month
+      responses:
+        "200":
+          description: Usage
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  usage: { $ref: "#/components/schemas/Usage" }
 
   /api/v1/notifications/{id}:
     get:
@@ -1057,9 +1130,9 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        "202": { description: "Notifications created (`accepted`, `failed`)" }
+        "202": { description: "Notifications created (`accepted`, `failed`; if some failed, the message and `schedule.lastRun.reason` say why)" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "429": { $ref: "#/components/responses/RateLimited" }
+        "429": { $ref: "#/components/responses/RateOrMonthlyLimited" }
 
   /api/v1/admin/businesses:
     get:
@@ -1073,6 +1146,9 @@ paths:
         - name: status
           in: query
           schema: { type: string, enum: [ACTIVE, SUSPENDED] }
+        - name: plan
+          in: query
+          schema: { type: string, enum: [FREE, STARTER, PRO] }
       responses:
         "200": { description: Businesses }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1080,7 +1156,9 @@ paths:
   /api/v1/admin/businesses/{id}:
     patch:
       tags: [Admin]
-      summary: Suspend or reactivate a business
+      summary: Suspend or reactivate a business, or change its plan
+      description: |
+        Send `status`, `plan` or both. A new plan's monthly limit applies immediately.
       security:
         - BearerAuth: []
       parameters:
@@ -1094,17 +1172,20 @@ paths:
           application/json:
             schema:
               type: object
-              required: [status]
               properties:
                 status: { type: string, enum: [ACTIVE, SUSPENDED] }
+                plan: { type: string, enum: [FREE, STARTER, PRO] }
+            example:
+              plan: STARTER
       responses:
         "200": { description: Updated }
+        "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/admin/businesses/{id}/stats:
     get:
       tags: [Admin]
-      summary: Notification stats for one business
+      summary: Notification stats and this month's plan usage for one business
       security:
         - BearerAuth: []
       parameters:
@@ -1113,7 +1194,16 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        "200": { description: Stats }
+        "200":
+          description: Stats and usage
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  stats: { $ref: "#/components/schemas/Stats" }
+                  usage: { $ref: "#/components/schemas/Usage" }
 
   /api/v1/admin/notifications:
     get:

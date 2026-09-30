@@ -39,7 +39,7 @@
 
       <main class="main-content">
         <header class="topbar">
-          <button class="mobile-menu" id="menuButton" type="button" aria-label="Open menu">☰</button>
+          <button class="mobile-menu" id="menuButton" type="button" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">☰</button>
           <div>
             <p class="eyebrow">WORKSPACE</p>
             <h1 id="pageTitle">Welcome</h1>
@@ -47,7 +47,7 @@
           <div class="topbar-actions"><button class="account-button" id="accountButton" type="button">Sign in</button><div class="connection-pill" id="connectionStatus"><span></span> Connecting…</div></div>
         </header>
 
-        <section class="view active-view" id="dashboard">
+        <section class="view active-view" id="view-dashboard">
           <div class="hero-card">
             <div>
               <p class="eyebrow">NOTIFICATION DELIVERY</p>
@@ -65,13 +65,18 @@
             <article class="stat-card"><p>In-app read rate</p><strong id="readRate">—</strong><small id="readRateNote">Marked read by your app</small></article>
           </section>
 
+          <section class="content-card usage-card" aria-label="Plan usage this month">
+            <div class="usage-head"><div><p class="eyebrow" id="overviewPlanName">YOUR PLAN</p><p class="usage-text" id="overviewUsageText">Sign in to see your usage.</p></div><button class="text-button" type="button" data-go-to="settings">Plan details →</button></div>
+            <progress class="usage-bar" id="overviewUsageBar" max="1" value="0" aria-label="Notifications used this month"></progress>
+          </section>
+
           <section class="content-card activity-preview">
             <div class="section-heading"><div><p class="eyebrow">LIVE FEED</p><h2>Recent delivery activity</h2></div><button class="text-button" type="button" data-go-to="activity">View all →</button></div>
             <div class="table-wrap"><table><thead><tr><th>Notification</th><th>Channel</th><th>Recipient</th><th>Status</th><th>Time</th></tr></thead><tbody id="recentActivity"></tbody></table><p class="empty-state hidden" id="emptyRecent">No notifications yet.</p></div>
           </section>
         </section>
 
-        <section class="view" id="send">
+        <section class="view" id="view-send">
           <div class="section-heading"><div><p class="eyebrow">COMPOSER</p><h2>Send a notification</h2><p class="subtle">Messages are queued for delivery on the selected channel and recorded in activity.</p></div></div>
           <form class="content-card send-form" id="notificationForm">
             <div class="channel-picker mode-picker" aria-label="Number of recipients">
@@ -95,13 +100,13 @@
           </form>
         </section>
 
-        <section class="view" id="activity">
+        <section class="view" id="view-activity">
           <div class="section-heading"><div><p class="eyebrow">DELIVERY LOG</p><h2>Notification activity</h2><p class="subtle">Search status and delivery history across every channel.</p></div><button class="secondary-button" id="refreshActivity" type="button">Refresh</button></div>
           <div class="content-card filter-bar"><label class="sr-only" for="activitySearch">Search notification activity</label><input id="activitySearch" type="search" maxlength="100" placeholder="Search recipient, subject or message" /><label class="sr-only" for="statusFilter">Filter by delivery status</label><select id="statusFilter"><option value="all">All statuses</option><option value="pending">Pending</option><option value="processing">Processing</option><option value="sent">Sent</option><option value="delivered">Delivered</option><option value="failed">Failed</option></select></div>
           <div class="content-card table-wrap"><table><thead><tr><th>Notification</th><th>Channel</th><th>Recipient</th><th>Status</th><th>Created</th></tr></thead><tbody id="activityRows"></tbody></table><p class="empty-state hidden" id="emptyActivity">No matching notifications found.</p></div>
         </section>
 
-        <section class="view" id="schedules">
+        <section class="view" id="view-schedules">
           <div class="section-heading"><div><p class="eyebrow">AUTOMATION</p><h2>Recurring schedules</h2><p class="subtle">Send the same message to the same recipients automatically, every day, week or month.</p></div></div>
           <form class="content-card send-form" id="scheduleForm">
             <div class="form-grid">
@@ -133,7 +138,7 @@
           </section>
         </section>
 
-        <section class="view help-view" id="help">
+        <section class="view help-view" id="view-help">
           <div class="section-heading"><div><p class="eyebrow">HELP &amp; SUPPORT</p><h2>How NotifyFlow works</h2><p class="subtle">What the service does, how to start sending and where to get help.</p></div></div>
           <div class="settings-grid">
             <section class="content-card settings-form">
@@ -155,6 +160,12 @@
                 <li><strong>Send from your server.</strong> Call <code>POST /api/v1/notifications</code> with the <code>X-API-Key</code> and <code>X-API-Secret</code> headers.</li>
               </ol>
               <div class="key-actions"><button class="primary-button" type="button" data-go-to="send">Send a notification</button><button class="secondary-button" type="button" data-go-to="credentials">API keys</button><a class="secondary-button" href="/docs" target="_blank" rel="noopener noreferrer">API documentation</a></div>
+            </section>
+
+            <section class="content-card settings-form full-span">
+              <p class="eyebrow">PLANS</p><h3>Plans we offer</h3>
+              <p class="subtle">Every business starts on Free. Each plan sets how many notifications you can send in a calendar month, on any channel. Usage resets on the 1st of each month (UTC).</p>
+              <div class="plan-grid" id="helpPlans"><p class="subtle">Loading plans…</p></div>
             </section>
 
             <section class="content-card settings-form full-span">
@@ -187,6 +198,10 @@
                   <p class="subtle">Requests over your limit get HTTP <code>429 Too many requests</code>. Wait a minute and try again. Your limits are listed under <em>Settings → Your limits</em>.</p>
                 </details>
                 <details>
+                  <summary>What happens when I reach my monthly limit?</summary>
+                  <p class="subtle">New notifications are refused with HTTP <code>429</code> and the code <code>MONTHLY_LIMIT_REACHED</code> until the limit resets on the 1st of next month. Notifications already accepted are still delivered, and repeating a request with the same <code>Idempotency-Key</code> still returns the original. Recurring schedules skip their runs and show why. Your usage is on the Overview and in <em>Settings → Plan and usage</em>; to raise the limit, ask for a bigger plan.</p>
+                </details>
+                <details>
                   <summary>I lost my API secret. Can I see it again?</summary>
                   <p class="subtle">No. The secret is stored only as a one-way hash, so it cannot be shown again. Generate a new key on <em>API credentials</em>, update your server, then revoke the old key.</p>
                 </details>
@@ -206,7 +221,7 @@
           </div>
         </section>
 
-        <section class="view" id="profile">
+        <section class="view" id="view-profile">
           <div class="section-heading"><div><p class="eyebrow">ACCOUNT</p><h2>Your profile</h2><p class="subtle">The account you are signed in with.</p></div></div>
           <div class="settings-grid">
             <section class="content-card profile-card">
@@ -229,7 +244,7 @@
           </div>
         </section>
 
-        <section class="view" id="settings">
+        <section class="view" id="view-settings">
           <div class="section-heading"><div><p class="eyebrow">WORKSPACE</p><h2>Settings</h2><p class="subtle">Your business details, account security, delivery channels and developer tools.</p></div></div>
           <div class="settings-grid">
             <form class="content-card settings-form" id="businessForm">
@@ -238,6 +253,15 @@
               <label>Contact email <input id="businessEmailInput" type="email" required maxlength="254" /></label>
               <div class="form-actions"><output id="businessOutput"></output><button class="primary-button" type="submit">Save details</button></div>
             </form>
+
+            <section class="content-card settings-form" id="planCard">
+              <p class="eyebrow">PLAN</p><h3>Plan and usage</h3>
+              <p class="setting-status"><span class="status paused" id="planBadge">—</span> <span id="planSummary"></span></p>
+              <progress class="usage-bar" id="settingsUsageBar" max="1" value="0" aria-label="Notifications used this month"></progress>
+              <p class="subtle" id="settingsUsageText">Sign in to see your usage.</p>
+              <ul class="status-list" id="planList"><li class="subtle">Loading plans…</li></ul>
+              <p class="subtle">Plans are set by the team that runs NotifyFlow. To change yours, <a class="inline-link" href="#help">contact support</a>.</p>
+            </section>
 
             <form class="content-card settings-form" id="passwordForm">
               <p class="eyebrow">SECURITY</p><h3>Change password</h3>
@@ -295,7 +319,7 @@
           </div>
         </section>
 
-        <section class="view" id="credentials">
+        <section class="view" id="view-credentials">
           <div class="section-heading"><div><p class="eyebrow">DEVELOPER SETTINGS</p><h2>API credentials</h2><p class="subtle">Use these credentials only on your server. Never place a secret in browser or mobile application code.</p></div></div>
           <div class="credentials-layout">
             <section class="content-card key-card">

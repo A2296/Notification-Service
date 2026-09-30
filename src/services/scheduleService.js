@@ -1,14 +1,22 @@
 const Schedule = require("../models/scheduleSchema");
 const Business = require("../models/businessSchema");
 const notificationService = require("./notificationService");
+const usageService = require("./usageService");
 const { nextRunAfter } = require("../utils/recurrence");
 
 // A worker that crashed mid-run leaves lockedAt set; the schedule is picked up again after this
 const LOCK_TIMEOUT_MS = 5 * 60 * 1000;
 
+// `reason` is the first error, e.g. the monthly limit ran out part-way through the run
 const summarize = (results) => {
   const accepted = results.filter((result) => result.notification).length;
-  return { accepted, failed: results.length - accepted };
+  const failure = results.find((result) => result.error);
+
+  return {
+    accepted,
+    failed: results.length - accepted,
+    ...(failure ? { reason: failure.error } : {}),
+  };
 };
 
 // Creates this run's notifications. Each one is tagged with the schedule in metadata.
@@ -47,12 +55,14 @@ const runDueSchedule = async (schedule, now) => {
   const business = await Business.findById(schedule.business);
   let summary;
 
-  if (business?.status === "ACTIVE") {
+  if (business?.status !== "ACTIVE") {
+    summary = { accepted: 0, failed: 0, skipped: "Business account is suspended" };
+  } else if ((await usageService.getUsage(business._id)).remaining <= 0) {
+    summary = { accepted: 0, failed: 0, skipped: "Monthly notification limit reached" };
+  } else {
     // Keyed by the due time, so a run repeated after a crash never sends twice
     summary = await send(schedule, `schedule:${schedule._id}:${dueAt.toISOString()}`);
     schedule.runCount += 1;
-  } else {
-    summary = { accepted: 0, failed: 0, skipped: "Business account is suspended" };
   }
 
   schedule.lastRun = { at: now, dueAt, manual: false, ...summary };
@@ -83,6 +93,11 @@ const runDueSchedules = async (now = new Date(), max = 50) => {
 
 // "Run now" from the API or dashboard; the regular timetable is unchanged
 const runNow = async (schedule) => {
+  const usage = await usageService.getUsage(schedule.business);
+  if (usage.remaining <= 0) {
+    throw usageService.limitReachedError(usage);
+  }
+
   const summary = await send(schedule);
 
   schedule.lastRun = { at: new Date(), dueAt: null, manual: true, ...summary };
