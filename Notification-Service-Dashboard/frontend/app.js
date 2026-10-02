@@ -81,6 +81,38 @@ const state = {
 
 const el = (selector) => document.querySelector(selector);
 
+// The public landing page is deliberately separate from the authenticated app.
+// Visitors can understand the product before choosing to sign in or register.
+function updateLandingActions() {
+  const signedIn = Boolean(state.user);
+  const login = el('#landingLogin');
+  const signup = el('#landingSignup');
+
+  login.textContent = signedIn ? 'Open dashboard' : 'Log in';
+  signup.innerHTML = signedIn ? 'Go to workspace <span>→</span>' : 'Start free <span>→</span>';
+  login.dataset.landingAuth = signedIn ? 'dashboard' : 'login';
+  signup.dataset.landingAuth = signedIn ? 'dashboard' : 'signup';
+}
+
+function showLanding() {
+  document.body.classList.add('show-landing');
+  setMenuOpen(false);
+  updateLandingActions();
+  window.scrollTo(0, 0);
+}
+
+function showApplication(view = 'dashboard') {
+  document.body.classList.remove('show-landing');
+  setView(view);
+  el('#pageTitle').focus({ preventScroll: true });
+}
+
+function openAuthFor(mode) {
+  registrationMode = mode === 'signup';
+  state.mfaToken = null;
+  openAuthDialog();
+}
+
 // ---- API client ----
 
 class ApiError extends Error {
@@ -784,6 +816,7 @@ function setSignedIn(user) {
     showToast('Platform admin accounts manage businesses through the admin API.');
   }
 
+  updateLandingActions();
   setView(state.view);
 }
 
@@ -811,6 +844,7 @@ function setSignedOut() {
   renderUsage();
   el('#pageTitle').textContent =
     state.view === 'dashboard' ? greeting() : TITLES[state.view];
+  updateLandingActions();
 }
 
 async function signOut() {
@@ -825,6 +859,7 @@ async function signOut() {
   }
 
   setSignedOut();
+  showLanding();
   showToast('Signed out.');
 }
 
@@ -835,6 +870,7 @@ function startDemo() {
   state.schedules = sampleSchedules();
 
   setConnection('Demo mode', false);
+  updateLandingActions();
   setView(state.view);
 }
 
@@ -1007,6 +1043,7 @@ function finishSignIn(user) {
   state.mfaToken = null;
   el('#authCode').value = '';
   authDialog.close();
+  showApplication('dashboard');
   setSignedIn(user);
 }
 
@@ -2427,7 +2464,24 @@ document.querySelectorAll('[data-view]').forEach((link) =>
 );
 
 document.querySelectorAll('[data-go-to]').forEach((button) =>
-  button.addEventListener('click', () => setView(button.dataset.goTo))
+  button.addEventListener('click', () => showApplication(button.dataset.goTo))
+);
+
+document.querySelectorAll('[data-landing-auth]').forEach((button) =>
+  button.addEventListener('click', () => {
+    const action = button.dataset.landingAuth;
+
+    if (action === 'dashboard') {
+      showApplication('dashboard');
+      return;
+    }
+
+    openAuthFor(action);
+  })
+);
+
+document.querySelectorAll('[data-enter-app]').forEach((button) =>
+  button.addEventListener('click', () => showApplication(button.dataset.enterApp || 'dashboard'))
 );
 
 window.addEventListener('hashchange', () => setView(location.hash.slice(1)));
@@ -2509,8 +2563,11 @@ notificationForm.addEventListener('input', () => {
 
 el('#authForm').addEventListener('submit', submitAuth);
 el('#authDialog .dialog-close').addEventListener('click', () => authDialog.close());
-// The link's #help then opens the Help page
-el('#authHelpLink').addEventListener('click', () => authDialog.close());
+el('#authHelpLink').addEventListener('click', (event) => {
+  event.preventDefault();
+  authDialog.close();
+  showApplication('help');
+});
 authDialog.addEventListener('click', (event) => {
   if (event.target === authDialog) {
     authDialog.close();
@@ -2600,12 +2657,8 @@ async function init() {
   } catch {
     setSignedOut();
 
-    // A shared link to the Help page opens it without the sign-in dialog on top
-    if (state.view === 'help') {
-      refreshView('help');
-    } else {
-      openAuthDialog();
-    }
+    // The public page explains the product before visitors decide to sign in.
+    showLanding();
   }
 }
 
