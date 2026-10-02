@@ -13,7 +13,96 @@
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="auth.css" />
   </head>
-  <body>
+  <body class="show-landing">
+    <section class="landing-page" id="landingPage" aria-label="NotifyFlow introduction">
+      <header class="landing-nav">
+        <a class="landing-brand" href="#top" aria-label="NotifyFlow home">
+          <span class="brand-mark">N</span><span>notify<span>flow</span></span>
+        </a>
+        <nav class="landing-links" aria-label="Marketing navigation">
+          <a href="#product">Product</a>
+          <a href="#how-it-works">How it works</a>
+          <a href="#plans">Plans</a>
+          <a href="#security">Security</a>
+        </nav>
+        <div class="landing-actions">
+          <button class="landing-login" type="button" id="landingLogin" data-landing-auth="login">Log in</button>
+          <button class="landing-signup" type="button" id="landingSignup" data-landing-auth="signup">Start free <span>→</span></button>
+        </div>
+      </header>
+
+      <main id="top">
+        <section class="landing-hero">
+          <div class="hero-copy">
+            <p class="landing-eyebrow"><span></span> NOTIFICATION INFRASTRUCTURE</p>
+            <h1>Every message.<br /><em>Right on time.</em></h1>
+            <p class="landing-lede">NotifyFlow gives your product one dependable API for email, SMS, and in-app notifications—plus the visibility to know what happened next.</p>
+            <div class="landing-cta-row">
+              <button class="landing-signup landing-cta" type="button" data-landing-auth="signup">Create a free workspace <span>→</span></button>
+              <a class="landing-text-link" href="#how-it-works">See how it works <span>↓</span></a>
+            </div>
+            <p class="landing-note">No credit card required · Start on the Free plan</p>
+          </div>
+          <div class="product-preview" aria-label="Example NotifyFlow delivery dashboard">
+            <div class="preview-top"><span class="preview-logo">N</span><span>Acme workspace</span><span class="preview-live"><i></i> Live</span></div>
+            <div class="preview-body">
+              <div class="preview-sidebar"><span class="preview-active"></span><span></span><span></span><span></span><span></span></div>
+              <div class="preview-content">
+                <p>DELIVERY OVERVIEW</p>
+                <h2>Good morning, Acme</h2>
+                <div class="preview-stats"><div><small>Sent today</small><strong>1,284</strong><b>↑ 12.4%</b></div><div><small>Delivered</small><strong>1,201</strong><b>93.5% rate</b></div></div>
+                <div class="preview-usage"><div><span>FREE PLAN</span><strong>482 / 1,000 used this month</strong></div><i><b></b></i></div>
+                <div class="preview-list"><div><span class="preview-channel email">✉</span><b>Order #10482 shipped</b><em>Delivered</em></div><div><span class="preview-channel sms">◌</span><b>Your verification code</b><em>Delivered</em></div><div><span class="preview-channel app">▣</span><b>New feature available</b><em class="pending">Pending</em></div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="landing-proof" aria-label="NotifyFlow benefits">
+          <div><strong>One API</strong><span>Email, SMS, and in-app delivery</span></div>
+          <div><strong>Full visibility</strong><span>Track every status from pending to delivered</span></div>
+          <div><strong>Built to grow</strong><span>Usage guardrails that scale with your product</span></div>
+        </section>
+
+        <section class="landing-section product-section" id="product">
+          <div class="section-intro"><p class="landing-eyebrow">ONE SYSTEM, EVERY MESSAGE</p><h2>Notifications without the infrastructure burden.</h2><p>Build the product experience your customers expect while NotifyFlow manages delivery, status tracking, scheduling, retries, and monthly usage in one place.</p></div>
+          <div class="feature-grid">
+            <article class="marketing-card feature-primary"><span class="marketing-icon">✦</span><p>DELIVERY</p><h3>Reach customers on the channel that fits.</h3><span>Email, SMS, and in-app notifications share one consistent workflow. Turn delivery channels live when your providers are ready, or log safely while you test.</span><div class="channel-tags"><b>✉ Email</b><b>◌ SMS</b><b>▣ In-app</b></div></article>
+            <article class="marketing-card"><span class="marketing-icon">◷</span><p>OBSERVABILITY</p><h3>Know the outcome of every send.</h3><span>Follow each notification from pending to delivered or failed, search delivery history, and retry when a provider issue is resolved.</span></article>
+            <article class="marketing-card"><span class="marketing-icon">⟳</span><p>AUTOMATION</p><h3>Schedule messages that run themselves.</h3><span>Create daily, weekly, or monthly sends. If a schedule reaches its quota, NotifyFlow records why the send was skipped.</span></article>
+            <article class="marketing-card"><span class="marketing-icon">⌘</span><p>DEVELOPER TOOLS</p><h3>Integrate without guesswork.</h3><span>Generate scoped API keys, use the documented base URL and OpenAPI spec, and see limits before your application sends.</span></article>
+          </div>
+        </section>
+
+        <section class="landing-section how-section" id="how-it-works">
+          <div class="section-intro"><p class="landing-eyebrow">HOW IT WORKS</p><h2>From request to delivery in four clear steps.</h2></div>
+          <ol class="steps-grid">
+            <li><span>01</span><h3>Create your workspace</h3><p>Register your business, set the sender name, and choose your plan.</p></li>
+            <li><span>02</span><h3>Connect securely</h3><p>Create API credentials for your server and use two-factor authentication for your account.</p></li>
+            <li><span>03</span><h3>Send or schedule</h3><p>Send one message, reach a recipient list, or schedule recurring notifications.</p></li>
+            <li><span>04</span><h3>Track and improve</h3><p>See delivery events, plan usage, and available capacity in one dashboard.</p></li>
+          </ol>
+        </section>
+
+        <section class="landing-section plans-section" id="plans">
+          <div class="section-intro"><p class="landing-eyebrow">CLEAR LIMITS, NO SURPRISES</p><h2>A plan for every stage of your product.</h2><p>Start free and grow when your notification volume does. The platform administrator assigns plans; there are no in-app payments.</p></div>
+          <div class="marketing-plans">
+            <article><p>FREE</p><h3>Free</h3><strong>1,000 <small>notifications / month</small></strong><span>For trying NotifyFlow and small projects.</span></article>
+            <article class="recommended"><p>MOST POPULAR</p><h3>Starter</h3><strong>10,000 <small>notifications / month</small></strong><span>For growing products with regular traffic.</span></article>
+            <article><p>SCALE</p><h3>Pro</h3><strong>100,000 <small>notifications / month</small></strong><span>For high-volume customer communication.</span></article>
+          </div>
+          <p class="plan-footnote">Usage is counted once per recipient. Retries do not count again, and you can always see used and available notifications in Settings.</p>
+        </section>
+
+        <section class="landing-section security-section" id="security">
+          <div class="security-panel"><div><p class="landing-eyebrow">SECURITY BY DEFAULT</p><h2>Your credentials and customers deserve careful handling.</h2><p>Keep API secrets on your server, protect account access with two-factor authentication, use recovery codes when needed, and sign out other devices whenever you need to.</p><button class="landing-login" type="button" data-enter-app="settings">Explore account controls <span>→</span></button></div><ul><li><span>✓</span> Session-based account access</li><li><span>✓</span> Two-factor authentication and recovery codes</li><li><span>✓</span> API secrets shown only once</li><li><span>✓</span> Sign out every device on demand</li></ul></div>
+        </section>
+
+        <section class="landing-final"><p class="landing-eyebrow">READY WHEN YOU ARE</p><h2>Start sending with confidence.</h2><p>Create a workspace, explore the dashboard, and connect your application when you are ready.</p><div class="landing-cta-row"><button class="landing-signup landing-cta" type="button" data-landing-auth="signup">Create a free workspace <span>→</span></button><button class="landing-login" type="button" data-enter-app="dashboard">Explore the dashboard</button></div></section>
+      </main>
+
+      <footer class="landing-footer"><a class="landing-brand" href="#top"><span class="brand-mark">N</span><span>notify<span>flow</span></span></a><span>Notification infrastructure for product teams.</span><a href="/docs" target="_blank" rel="noopener noreferrer">API documentation ↗</a></footer>
+    </section>
     <div class="app-shell">
       <aside class="sidebar" id="sidebar" aria-label="Main navigation">
         <div class="sidebar-top">
@@ -42,7 +131,7 @@
           <button class="mobile-menu" id="menuButton" type="button" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">☰</button>
           <div>
             <p class="eyebrow">WORKSPACE</p>
-            <h1 id="pageTitle">Welcome</h1>
+            <h1 id="pageTitle" tabindex="-1">Welcome</h1>
           </div>
           <div class="topbar-actions"><button class="account-button" id="accountButton" type="button">Sign in</button><div class="connection-pill" id="connectionStatus"><span></span> Connecting…</div></div>
         </header>
