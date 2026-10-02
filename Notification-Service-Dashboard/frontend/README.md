@@ -1,106 +1,95 @@
 # NotifyFlow Frontend Dashboard
 
-NotifyFlow is the frontend dashboard for the Notification Service platform. It gives registered businesses one place to sign up, send email, SMS, and in-app notifications, monitor delivery activity, and manage the API keys their own servers use.
+NotifyFlow is the frontend dashboard for the Notification Service platform. It gives registered businesses one place to authenticate, configure their API connection, send email, SMS, and in-app notifications, manage API credentials, and monitor notification delivery activity.
 
-The dashboard is dependency-free: it is built with standard HTML, CSS, and JavaScript. The Notification Service serves it directly, so it talks to the API on the same origin with no configuration.
+The dashboard is dependency-free: it is built with standard HTML, CSS, and JavaScript and communicates with the Node.js/Express backend through configurable HTTP API endpoints.
 
-## Features
+## Frontend Features
 
-- Business registration and sign-in; sign-out ends the session on the server
-- Overview of total, sent/delivered, in-progress, and failed notifications, plus the in-app read rate (how many delivered in-app messages your app has marked read) and this month's plan usage (amber near the limit, red when it is reached)
-- Notification composer for email, SMS, and in-app channels, with per-channel validation
-- Bulk mode: send one message to up to 100 recipients at once, with per-recipient results
-- Duplicate-send protection: a retried send reuses its `Idempotency-Key`
-- Delivery-activity table with server-side search and status filters
-- Failed notifications show the provider's error and a **Retry** button
-- **Send later**: schedule a one-off notification for a date and time
-- **Schedules**: recurring sends (daily, weekly on chosen days, or monthly) at a local time in any timezone, with pause, resume, run now and delete
-- **Profile** (top-right account button): who is signed in, their business, member since, last sign-in and two-factor status
-- **Settings**: business details, plan and usage (with the plans on offer), password change, two-factor authentication (QR code, recovery codes), sign out everywhere, delivery channel status, API base URL and documentation, limits
-- **Help & support**: what NotifyFlow is, getting-started steps, the plans on offer, FAQ and the support contact set by the operator; open to visitors who are not signed in (`/#help`), and linked from the sign-in dialog
-- A clear message when the plan's monthly limit is reached (sends, bulk sends and schedule runs)
-- Two-step sign-in when two-factor authentication is on
-- Collapsible sidebar; the choice is remembered in this browser
-- On phones the sidebar is a drawer: a tap outside it or Escape closes it (without pressing what is underneath) and the page behind it stays still; on short screens the sidebar scrolls
-- Every page opens at its top (links like `/#settings` never scroll past the top bar), and long business names or emails are shortened with "…" instead of widening the page
-- API key management: generate (the secret is shown once), list, and revoke keys
-- Ready-to-run `curl` example using your key ID and the service's real URL
-- Demo mode with sample data when the page is opened without the API
+- Public marketing homepage explaining NotifyFlow, its channels, plans, security controls, and developer workflow before a visitor signs in
+- Business registration and sign-in interface
+- Dashboard overview of sent, delivered, pending, and failed notifications
+- Notification composer for email, SMS, and in-app channels
+- Delivery-activity table with search and status filters
+- API credential screen with a copyable API request example
+- Configurable backend API URL and bearer-token connection
+- Demo mode for reviewing the interface without a running backend
 - Responsive layout for desktop and mobile devices
 - Accessible form labels and semantic status output
 
-## Technology
+## Frontend Technology
 
 | Area | Technology |
 | --- | --- |
 | Structure | HTML5 |
 | Styling | CSS3 |
-| Interactivity and API requests | Vanilla JavaScript (ES2020+) |
-| Backend integration | Same-origin REST calls with `fetch` and an HttpOnly session cookie |
+| Interactivity and API requests | Vanilla JavaScript (ES6+) |
+| Backend integration | REST API using `fetch` |
 
 ## Project Structure
 
 ```text
 frontend/
-├── index.html      # Dashboard markup, navigation, forms, dialogs, and tables
-├── app.js          # UI behavior, API client, authentication, and notification actions
-├── styles.css      # Main dashboard layout, responsive design, and component styles
+├── index.html      # Marketing homepage, dashboard markup, navigation, forms, dialogs, and tables
+├── app.js          # Landing-page routing, UI behavior, API client, authentication, and notification actions
+├── styles.css      # Marketing homepage, dashboard layout, responsive design, and component styles
 ├── auth.css        # Authentication-specific styles
-└── README.md       # Frontend documentation
+└── README.md       # Frontend documentation and setup instructions
 ```
 
 ## Getting Started
 
-Start the Notification Service (see the [main README](../../README.md#quick-start)), then open its address in a browser:
+### Prerequisites
 
-- Docker: `docker compose up --build -d`, then open http://localhost:5000/
-- Node.js: `npm run dev`, then open http://localhost:5000/
+- A modern web browser
+- Node.js and npm (recommended for serving the site locally)
+- A running Notification Service backend for live API features
 
-Select **Sign in → Create an account** to register a business, then go to **API credentials** to generate a key for your server.
+### Run Locally
 
-### Demo mode
+From the `frontend` directory, run one of the following commands:
 
-If the page is opened without the API behind it (for example `npx serve .` in this folder, or opening `index.html` directly), the dashboard shows sample data and does not send anything. The status pill in the top bar reads **Demo mode**.
+```bash
+npx serve .
+# or
+npx http-server .
+```
 
-## API Endpoints Used
+Open the local URL shown in the terminal. You can also open `index.html` directly in a browser for a visual demo, but a local server is recommended for normal browser API behavior.
 
-All paths are relative to the page's own origin. The full reference is at `/docs`.
+## Connecting the Backend
 
-| Feature | HTTP request |
-| --- | --- |
-| Detect the API | `GET /health` |
-| Current session | `GET /api/v1/auth/me` |
-| Register business | `POST /api/v1/auth/register` |
-| Sign in | `POST /api/v1/auth/login` |
-| Sign out | `POST /api/v1/auth/logout` |
-| Overview counts and read rate | `GET /api/v1/notifications/stats` |
-| Plan usage this month | `GET /api/v1/notifications/usage` |
-| Plans on offer | `GET /api/v1/plans` (public) |
-| Activity | `GET /api/v1/notifications?limit=50&search=…&status=…` |
-| Send notification | `POST /api/v1/notifications` (with an `Idempotency-Key` header) |
-| Send in bulk | `POST /api/v1/notifications/bulk` (with an `Idempotency-Key` header) |
-| Retry a failed notification | `POST /api/v1/notifications/:id/retry` |
-| Recurring schedules | `GET/POST /api/v1/schedules`, `PATCH/DELETE /api/v1/schedules/:id`, `POST /api/v1/schedules/:id/run` |
-| Two-factor sign-in | `POST /api/v1/auth/login/mfa` |
-| Profile and password | `PATCH /api/v1/account`, `POST /api/v1/account/password` |
-| Two-factor setup | `POST /api/v1/account/mfa/setup`, `/mfa/enable`, `/mfa/disable` |
-| Business and settings | `PATCH /api/v1/account/business`, `GET /api/v1/account/settings` |
-| Help & support contact | `GET /api/v1/support` (public) |
-| List API keys | `GET /api/v1/api-keys` |
-| Create API key | `POST /api/v1/api-keys` |
-| Revoke API key | `DELETE /api/v1/api-keys/:id` |
+1. Open the dashboard.
+2. Select **Connection settings** in the sidebar.
+3. Enter the deployed Express API base URL, for example `http://localhost:5000`.
+4. Enter a bearer token when the backend requires one.
+5. Save the connection and refresh the activity page.
+
+Connection settings are stored only in the current browser's `localStorage`.
+
+## Expected API Endpoints
+
+The API adapter is centralized in `app.js`. Update the paths there if the backend uses different routes.
+
+| Feature | HTTP request | Expected response |
+| --- | --- | --- |
+| Read notifications | `GET /api/notifications?limit=50` | An array, or an object containing `notifications` or `data` |
+| Send notification | `POST /api/notifications` | A notification with `id`/`_id` and `status` |
+| Register business | `POST /api/auth/register` | `token` or `accessToken` |
+| Sign in business | `POST /api/auth/login` | `token` or `accessToken` |
+| Create API key | `POST /api/api-keys` | `key` or `apiKey` |
 
 ### Request Payloads
 
-Send a notification (the composer maps the recipient field to `email`, `phone`, or `id` by channel):
+Send a notification:
 
 ```json
 {
-  "channel": "EMAIL",
-  "recipient": { "email": "user@example.com" },
+  "channel": "email",
+  "recipient": "user@example.com",
+  "referenceId": "order_10482",
   "subject": "Order shipped",
-  "message": "Your order is on its way.",
-  "metadata": { "referenceId": "order_10482" }
+  "message": "Your order is on its way."
 }
 ```
 
@@ -109,26 +98,23 @@ Register a business:
 ```json
 {
   "businessName": "Acme Inc.",
-  "name": "Ada Lovelace",
   "email": "admin@acme.com",
-  "password": "at-least-8-characters"
+  "password": "your-secure-password"
 }
 ```
 
 ## Security Notes
 
-- The session token is stored by the browser in an HttpOnly, `SameSite=Strict` cookie. `app.js` never sees it. The only thing written to `localStorage` is the sidebar display preference; nothing sensitive is stored in the browser.
-- Every request goes to the page's own origin, so the dashboard cannot be pointed at another server. Each request also sends `X-Requested-With: XMLHttpRequest`, which the API requires for cookie-authenticated changes (CSRF protection), and times out after 15 seconds.
-- The API serves the page with a strict Content-Security-Policy: scripts and styles only from this origin (plus Google Fonts), no inline code, and no framing.
-- All data from the API is rendered with `textContent`, never as HTML.
-- An API secret is shown once, right after it is generated. Store it in your server's environment; never put it in browser or mobile code.
-- Deploy behind HTTPS. In production the session cookie is marked `Secure`.
+- Do not put a production API secret in frontend code, a public repository, or browser storage.
+- Use authenticated user sessions or short-lived bearer tokens for dashboard requests.
+- Configure the Express backend's CORS policy to allow the dashboard's deployed URL.
+- Always use HTTPS for deployed frontend and backend environments.
 
 ## Team Contributions
 
-| Team Member | GitHub | Role | Contribution |
-| --- | --- | --- | --- |
-| Macfrancis C. Nwaigwe | [@dashtech-c](https://github.com/dashtech-c) | Frontend Developer | Designed and implemented the Notification Service dashboard, including business registration/sign-in, API connection settings, API credential management, notification composer, delivery activity tracking, and responsive user interface styling. |
+| Team Member | GitHub Username | Profile | Role | Contribution |
+| --- | --- | --- | --- | --- |
+| Macfrancis C. Nwaigwe | `dashtech0147` | [@A2296](https://github.com/A2296) | Frontend Developer | Designed and implemented the Notification Service dashboard and public landing page, including business registration/sign-in, API connection settings, API credential management, notification composer, delivery activity tracking, and responsive user interface styling. |
 
 ## License
 
