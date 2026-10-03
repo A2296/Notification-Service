@@ -83,30 +83,46 @@ const el = (selector) => document.querySelector(selector);
 
 // The public landing page is deliberately separate from the authenticated app.
 // Visitors can understand the product before choosing to sign in or register.
+const isAppView = (view) => view === 'dashboard' || Boolean(TITLES[view]);
+const landingShown = () => document.body.classList.contains('show-landing');
+// Demo mode has no sign-in, so its visitors go straight into the dashboard
+const canEnterApp = () => Boolean(state.user) || state.mode === 'demo';
+
+// The app page to open once the visitor has signed in from the homepage
+let viewAfterSignIn = null;
+
 function updateLandingActions() {
-  const signedIn = Boolean(state.user);
-  const login = el('#landingLogin');
+  const signedIn = canEnterApp();
   const signup = el('#landingSignup');
 
-  login.textContent = signedIn ? 'Open dashboard' : 'Log in';
-  const signupLabel = signedIn ? 'Go to workspace' : 'Start free';
+  el('#landingLogin').hidden = signedIn;
   const arrow = document.createElement('span');
   arrow.textContent = '→';
-  signup.replaceChildren(document.createTextNode(`${signupLabel} `), arrow);
-  login.dataset.landingAuth = signedIn ? 'dashboard' : 'login';
-  signup.dataset.landingAuth = signedIn ? 'dashboard' : 'signup';
+  signup.replaceChildren(document.createTextNode(`${signedIn ? 'Open dashboard' : 'Start free'} `), arrow);
 }
 
-function showLanding() {
+// section: a homepage section id from the address (#plans), so shared links still land on it
+function showLanding(section) {
   document.body.classList.add('show-landing');
   setMenuOpen(false);
   updateLandingActions();
-  window.scrollTo(0, 0);
+
+  const target = section && el('#landingPage').querySelector(`#${CSS.escape(section)}`);
+
+  if (target) {
+    history.replaceState(null, '', `#${section}`);
+    target.scrollIntoView();
+  } else {
+    // A bare address: an app page's #name here would reopen that page on reload
+    history.replaceState(null, '', location.pathname + location.search);
+    window.scrollTo(0, 0);
+  }
 }
 
 function showApplication(view = 'dashboard') {
   document.body.classList.remove('show-landing');
   setView(view);
+  window.scrollTo(0, 0);
   el('#pageTitle').focus({ preventScroll: true });
 }
 
@@ -114,6 +130,17 @@ function openAuthFor(mode) {
   registrationMode = mode === 'signup';
   state.mfaToken = null;
   openAuthDialog();
+}
+
+// Help is public; every other page asks a visitor to sign in (or register) first
+function enterApp(view = 'dashboard', authMode = 'login') {
+  if (canEnterApp() || view === 'help') {
+    showApplication(view);
+    return;
+  }
+
+  viewAfterSignIn = view;
+  openAuthFor(authMode);
 }
 
 // ---- API client ----
@@ -1046,8 +1073,18 @@ function finishSignIn(user) {
   state.mfaToken = null;
   el('#authCode').value = '';
   authDialog.close();
-  showApplication('dashboard');
+
+  // From the homepage, open the page the visitor chose. A sign-in after an expired
+  // session stays on the current page.
+  if (landingShown()) {
+    document.body.classList.remove('show-landing');
+    state.view = viewAfterSignIn || 'dashboard';
+    window.scrollTo(0, 0);
+  }
+
+  viewAfterSignIn = null;
   setSignedIn(user);
+  el('#pageTitle').focus({ preventScroll: true });
 }
 
 // ---- Send notification ----
@@ -2471,23 +2508,66 @@ document.querySelectorAll('[data-go-to]').forEach((button) =>
 );
 
 document.querySelectorAll('[data-landing-auth]').forEach((button) =>
-  button.addEventListener('click', () => {
-    const action = button.dataset.landingAuth;
-
-    if (action === 'dashboard') {
-      showApplication('dashboard');
-      return;
-    }
-
-    openAuthFor(action);
-  })
+  button.addEventListener('click', () => enterApp('dashboard', button.dataset.landingAuth))
 );
 
 document.querySelectorAll('[data-enter-app]').forEach((button) =>
-  button.addEventListener('click', () => showApplication(button.dataset.enterApp || 'dashboard'))
+  button.addEventListener('click', () => enterApp(button.dataset.enterApp || 'dashboard'))
 );
 
-window.addEventListener('hashchange', () => setView(location.hash.slice(1)));
+document.querySelectorAll('[data-show-landing]').forEach((link) =>
+  link.addEventListener('click', (event) => {
+    event.preventDefault();
+    showLanding();
+  })
+);
+
+window.addEventListener('hashchange', () => {
+  const view = location.hash.slice(1);
+
+  // On the homepage #product, #plans… are section links; only an app page (#help) leaves it
+  if (landingShown()) {
+    if (isAppView(view)) {
+      enterApp(view);
+    }
+
+    return;
+  }
+
+  setView(view);
+});
+
+// Homepage code sample: one request, a tab per channel
+const codeTabs = [...document.querySelectorAll('.code-tabs [role="tab"]')];
+
+function selectCodeTab(tab) {
+  codeTabs.forEach((other) => {
+    const selected = other === tab;
+    other.setAttribute('aria-selected', String(selected));
+    other.tabIndex = selected ? 0 : -1;
+    el(`#${other.getAttribute('aria-controls')}`).hidden = !selected;
+  });
+}
+
+codeTabs.forEach((tab, index) => {
+  tab.addEventListener('click', () => selectCodeTab(tab));
+  tab.addEventListener('keydown', (event) => {
+    const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
+
+    if (step) {
+      const next = codeTabs[(index + step + codeTabs.length) % codeTabs.length];
+      selectCodeTab(next);
+      next.focus();
+    }
+  });
+});
+
+// The sample calls the address this page is served from
+document.querySelectorAll('[data-api-origin]').forEach((node) => {
+  if (location.protocol !== 'file:') {
+    node.textContent = location.origin;
+  }
+});
 
 el('#menuButton').addEventListener('click', () =>
   setMenuOpen(!el('.sidebar').classList.contains('open'))
@@ -2645,10 +2725,26 @@ async function init() {
   setupTimezones();
   updateScheduleForm();
   renderApiKeys();
-  setView(location.hash.slice(1));
+
+  // Read before setView rewrites the address: #settings is an app page, #plans a homepage section
+  const requested = location.hash.slice(1);
+  setView(requested);
+
+  // Only the app writes #<page> addresses, so this is most likely a signed-in reload:
+  // show the app shell while the session is checked instead of flashing the homepage
+  if (isAppView(requested)) {
+    document.body.classList.remove('show-landing');
+  }
 
   if (!(await detectBackend())) {
     startDemo();
+
+    if (isAppView(requested)) {
+      showApplication(requested);
+    } else {
+      showLanding(requested);
+    }
+
     return;
   }
 
@@ -2656,12 +2752,19 @@ async function init() {
 
   try {
     const { user } = await request(`${API_BASE}/auth/me`);
+    // Returning users go straight back to the page they were on
+    document.body.classList.remove('show-landing');
     setSignedIn(user);
   } catch {
     setSignedOut();
 
     // The public page explains the product before visitors decide to sign in.
-    showLanding();
+    // A shared link to the Help page still opens it.
+    if (requested === 'help') {
+      showApplication('help');
+    } else {
+      showLanding(requested);
+    }
   }
 }
 
