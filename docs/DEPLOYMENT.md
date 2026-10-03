@@ -55,9 +55,10 @@ The run appears under the repository's **Deployments → production**. Set it up
 4. In Render, set the service's **Auto-Deploy** to **Off** so a later GitHub connection
    cannot deploy the same commit twice.
 
-Until the secret exists, the `deploy` job fails on `main` with a message pointing here, so an
-undeployed merge is never silent. To deploy by hand (for example to roll back), use
-**Manual Deploy** in the Render dashboard.
+Until the secret exists, the `deploy` job is skipped on `main`. The run stays green but shows
+a warning, pointing here, that `main` was not deployed, so an undeployed merge is never
+silent. Deploy such a merge by hand with **Manual Deploy** in the Render dashboard, which is also
+how to roll back.
 
 ## 3. Create the platform admin
 
