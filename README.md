@@ -10,7 +10,7 @@ and tracks every status change.
 
 Built with Node.js, Express 5, MongoDB (Mongoose), Nodemailer and Twilio.
 
-- **Live demo:** https://notifyflow-labu.onrender.com (dashboard) ·
+- **Live demo:** https://notifyflow-labu.onrender.com (homepage and dashboard) ·
   [Help & plans](https://notifyflow-labu.onrender.com/#help) ·
   [API docs](https://notifyflow-labu.onrender.com/docs) ·
   [health](https://notifyflow-labu.onrender.com/health)
@@ -20,8 +20,8 @@ Built with Node.js, Express 5, MongoDB (Mongoose), Nodemailer and Twilio.
 
 > The live demo runs on free hosting: after 15 minutes without visitors it sleeps, so the first
 > page load can take about a minute. Emails and SMS are logged by the server rather than
-> delivered, so no real messages are sent. Register any business on the dashboard to try it,
-> or open the Help page first; it needs no account.
+> delivered, so no real messages are sent. Select **Start free** on the homepage to register any
+> business and try it, or open the Help page first; it needs no account.
 
 ---
 
@@ -55,6 +55,7 @@ The dashboard in [`Notification-Service-Dashboard/frontend`](Notification-Servic
 is served by the API itself, so it is available at `http://localhost:5000/` (or your deployed URL)
 with no separate hosting or configuration.
 
+- Public homepage for visitors: the channels, how it works, a `curl` example per channel, plans, security and an FAQ, with **Log in** and **Start free** always in the top bar; signed-in users go straight back to the dashboard
 - Business registration and sign-in; sign-out ends the session on the server
 - Overview of total, sent/delivered, in-progress and failed notifications, plus the in-app read rate and this month's plan usage (amber near the limit, red when it is reached)
 - Notification composer for email, SMS and in-app channels (with duplicate-send protection)
