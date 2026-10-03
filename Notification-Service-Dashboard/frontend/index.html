@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Notification Service dashboard" />
+    <meta name="description" content="NotifyFlow: one API for email, SMS and in-app notifications, with delivery tracking, recurring schedules and clear monthly limits." />
     <meta name="referrer" content="no-referrer" />
     <title>NotifyFlow | Notification Service</title>
     <link rel="icon" href="data:," />
@@ -22,8 +22,9 @@
         <nav class="landing-links" aria-label="Marketing navigation">
           <a href="#product">Product</a>
           <a href="#how-it-works">How it works</a>
+          <a href="#developers">Developers</a>
           <a href="#plans">Plans</a>
-          <a href="#security">Security</a>
+          <a href="#faq">FAQ</a>
         </nav>
         <div class="landing-actions">
           <button class="landing-login" type="button" id="landingLogin" data-landing-auth="login">Log in</button>
@@ -71,6 +72,7 @@
             <article class="marketing-card"><span class="marketing-icon">◷</span><p>OBSERVABILITY</p><h3>Know the outcome of every send.</h3><span>Follow each notification from pending to delivered or failed, search delivery history, and retry when a provider issue is resolved.</span></article>
             <article class="marketing-card"><span class="marketing-icon">⟳</span><p>AUTOMATION</p><h3>Schedule messages that run themselves.</h3><span>Create daily, weekly, or monthly sends. If a schedule reaches its quota, NotifyFlow records why the send was skipped.</span></article>
             <article class="marketing-card"><span class="marketing-icon">⌘</span><p>DEVELOPER TOOLS</p><h3>Integrate without guesswork.</h3><span>Generate scoped API keys, use the documented base URL and OpenAPI spec, and see limits before your application sends.</span></article>
+            <article class="marketing-card"><span class="marketing-icon">◎</span><p>AUDIENCES</p><h3>Reach one person or a whole list.</h3><span>Save recipients once and refer to them by your own user ID. Send to up to 100 people in a single request, each with their own delivery status.</span></article>
           </div>
         </section>
 
@@ -82,6 +84,60 @@
             <li><span>03</span><h3>Send or schedule</h3><p>Send one message, reach a recipient list, or schedule recurring notifications.</p></li>
             <li><span>04</span><h3>Track and improve</h3><p>See delivery events, plan usage, and available capacity in one dashboard.</p></li>
           </ol>
+        </section>
+
+        <section class="landing-section developers-section" id="developers">
+          <div class="developers-layout">
+            <div class="section-intro">
+              <p class="landing-eyebrow">FOR DEVELOPERS</p>
+              <h2>One request, any channel.</h2>
+              <p>Your server sends a notification with a single HTTPS call. Change the channel and NotifyFlow takes care of the provider, retries, and status updates.</p>
+              <ul class="developer-points">
+                <li><span class="point-check" aria-hidden="true">✓</span><span>Authenticate with an API key and secret from the dashboard</span></li>
+                <li><span class="point-check" aria-hidden="true">✓</span><span>Add <code>scheduledAt</code> to send later instead of right away</span></li>
+                <li><span class="point-check" aria-hidden="true">✓</span><span>Send to up to 100 recipients in one bulk request</span></li>
+                <li><span class="point-check" aria-hidden="true">✓</span><span>Safe to retry: the same <code>Idempotency-Key</code> never sends twice</span></li>
+              </ul>
+              <a class="landing-text-link" href="/docs" target="_blank" rel="noopener noreferrer">Read the API reference <span>↗</span></a>
+            </div>
+            <div class="code-window">
+              <div class="code-tabs" role="tablist" aria-label="Example request by channel">
+                <button type="button" role="tab" id="codeTabEmail" aria-controls="codeEmail" aria-selected="true">Email</button>
+                <button type="button" role="tab" id="codeTabSms" aria-controls="codeSms" aria-selected="false" tabindex="-1">SMS</button>
+                <button type="button" role="tab" id="codeTabInApp" aria-controls="codeInApp" aria-selected="false" tabindex="-1">In-app</button>
+              </div>
+<pre class="code-block" role="tabpanel" id="codeEmail" aria-labelledby="codeTabEmail" tabindex="0"><code><span class="tok-cmd">curl</span> -X POST <span data-api-origin>https://your-notifyflow-host</span>/api/v1/notifications \
+  -H <span class="tok-str">"X-API-Key: ns_pk_…"</span> \
+  -H <span class="tok-str">"X-API-Secret: ns_sk_…"</span> \
+  -H <span class="tok-str">"Content-Type: application/json"</span> \
+  -d '{
+    <span class="tok-key">"channel"</span>: <span class="tok-str">"EMAIL"</span>,
+    <span class="tok-key">"recipient"</span>: { <span class="tok-key">"email"</span>: <span class="tok-str">"ada@example.com"</span> },
+    <span class="tok-key">"subject"</span>: <span class="tok-str">"Your order has shipped"</span>,
+    <span class="tok-key">"message"</span>: <span class="tok-str">"Order #10482 is on its way."</span>
+  }'</code></pre>
+<pre class="code-block" role="tabpanel" id="codeSms" aria-labelledby="codeTabSms" tabindex="0" hidden><code><span class="tok-cmd">curl</span> -X POST <span data-api-origin>https://your-notifyflow-host</span>/api/v1/notifications \
+  -H <span class="tok-str">"X-API-Key: ns_pk_…"</span> \
+  -H <span class="tok-str">"X-API-Secret: ns_sk_…"</span> \
+  -H <span class="tok-str">"Content-Type: application/json"</span> \
+  -d '{
+    <span class="tok-key">"channel"</span>: <span class="tok-str">"SMS"</span>,
+    <span class="tok-key">"recipient"</span>: { <span class="tok-key">"phone"</span>: <span class="tok-str">"+15555550123"</span> },
+    <span class="tok-key">"message"</span>: <span class="tok-str">"Your verification code is 482913"</span>
+  }'</code></pre>
+<pre class="code-block" role="tabpanel" id="codeInApp" aria-labelledby="codeTabInApp" tabindex="0" hidden><code><span class="tok-cmd">curl</span> -X POST <span data-api-origin>https://your-notifyflow-host</span>/api/v1/notifications \
+  -H <span class="tok-str">"X-API-Key: ns_pk_…"</span> \
+  -H <span class="tok-str">"X-API-Secret: ns_sk_…"</span> \
+  -H <span class="tok-str">"Content-Type: application/json"</span> \
+  -d '{
+    <span class="tok-key">"channel"</span>: <span class="tok-str">"IN_APP"</span>,
+    <span class="tok-key">"recipient"</span>: { <span class="tok-key">"id"</span>: <span class="tok-str">"user_8231"</span> },
+    <span class="tok-key">"subject"</span>: <span class="tok-str">"New feature available"</span>,
+    <span class="tok-key">"message"</span>: <span class="tok-str">"Scheduled exports are live in your workspace."</span>
+  }'</code></pre>
+              <p class="code-response"><b>202 Accepted</b> Notification accepted for delivery · status <code>PENDING</code></p>
+            </div>
+          </div>
         </section>
 
         <section class="landing-section plans-section" id="plans">
@@ -98,15 +154,62 @@
           <div class="security-panel"><div><p class="landing-eyebrow">SECURITY BY DEFAULT</p><h2>Your credentials and customers deserve careful handling.</h2><p>Keep API secrets on your server, protect account access with two-factor authentication, use recovery codes when needed, and sign out other devices whenever you need to.</p><button class="landing-login" type="button" data-enter-app="settings">Explore account controls <span>→</span></button></div><ul><li><span>✓</span> Session-based account access</li><li><span>✓</span> Two-factor authentication and recovery codes</li><li><span>✓</span> API secrets shown only once</li><li><span>✓</span> Sign out every device on demand</li></ul></div>
         </section>
 
-        <section class="landing-final"><p class="landing-eyebrow">READY WHEN YOU ARE</p><h2>Start sending with confidence.</h2><p>Create a workspace, explore the dashboard, and connect your application when you are ready.</p><div class="landing-cta-row"><button class="landing-signup landing-cta" type="button" data-landing-auth="signup">Create a free workspace <span>→</span></button><button class="landing-login" type="button" data-enter-app="dashboard">Explore the dashboard</button></div></section>
+        <section class="landing-section faq-section" id="faq">
+          <div class="faq-layout">
+            <div class="section-intro">
+              <p class="landing-eyebrow">FAQ</p>
+              <h2>Questions, answered.</h2>
+              <p>What to know before you send your first notification. Still unsure? <a href="#help">Visit Help &amp; support</a>.</p>
+            </div>
+            <div class="faq-list">
+              <details>
+                <summary>Who actually delivers the email and SMS?</summary>
+                <p>NotifyFlow sends email through an SMTP server and SMS through Twilio, both set up by the platform operator. Until a provider is configured, that channel logs each message instead of sending it, so you can test the whole flow safely.</p>
+              </details>
+              <details>
+                <summary>What is an in-app notification?</summary>
+                <p>A message stored for one of your users, identified by your own user ID. Your application fetches it through the API and marks it as read, and the Overview shows your in-app read rate.</p>
+              </details>
+              <details>
+                <summary>What happens when I reach my monthly limit?</summary>
+                <p>New sends are refused with a clear error until the next calendar month or a plan change. Recurring schedules skip that run and record why. Retries never count against your limit.</p>
+              </details>
+              <details>
+                <summary>How do I move to a bigger plan?</summary>
+                <p>Plans are assigned by the platform administrator, and there are no payments in the app. Contact support from the Help &amp; support page to move to Starter or Pro.</p>
+              </details>
+              <details>
+                <summary>Can I send later or on a schedule?</summary>
+                <p>Yes. Pick a time for a single message, or create daily, weekly, or monthly schedules from the dashboard or the API.</p>
+              </details>
+              <details>
+                <summary>Is my data kept separate from other businesses?</summary>
+                <p>Yes. Each business has its own workspace, and its accounts and API keys can only reach its own notifications, recipients, and schedules.</p>
+              </details>
+            </div>
+          </div>
+        </section>
+
+        <section class="landing-final"><p class="landing-eyebrow">READY WHEN YOU ARE</p><h2>Start sending with confidence.</h2><p>Create a workspace, explore the dashboard, and connect your application when you are ready.</p><div class="landing-cta-row"><button class="landing-signup landing-cta" type="button" data-landing-auth="signup">Create a free workspace <span>→</span></button><a class="landing-login" href="/docs" target="_blank" rel="noopener noreferrer">Read the API docs <span>↗</span></a></div></section>
       </main>
 
-      <footer class="landing-footer"><a class="landing-brand" href="#top"><span class="brand-mark">N</span><span>notify<span>flow</span></span></a><span>Notification infrastructure for product teams.</span><a href="/docs" target="_blank" rel="noopener noreferrer">API documentation ↗</a></footer>
+      <footer class="landing-footer">
+        <div class="footer-brand">
+          <a class="landing-brand" href="#top"><span class="brand-mark">N</span><span>notify<span>flow</span></span></a>
+          <p>Notification infrastructure for product teams.</p>
+        </div>
+        <nav class="footer-links" aria-label="Footer">
+          <div><p>Product</p><a href="#product">Features</a><a href="#how-it-works">How it works</a><a href="#plans">Plans</a><a href="#security">Security</a></div>
+          <div><p>Developers</p><a href="/docs" target="_blank" rel="noopener noreferrer">API reference ↗</a><a href="#developers">Code examples</a><a href="#help">Help &amp; support</a></div>
+          <div><p>Account</p><button type="button" data-landing-auth="login">Log in</button><button type="button" data-landing-auth="signup">Create a workspace</button></div>
+        </nav>
+        <p class="footer-legal">© 2026 NotifyFlow</p>
+      </footer>
     </section>
     <div class="app-shell">
       <aside class="sidebar" id="sidebar" aria-label="Main navigation">
         <div class="sidebar-top">
-          <a class="brand" href="#dashboard" aria-label="NotifyFlow dashboard">
+          <a class="brand" href="./" data-show-landing aria-label="NotifyFlow homepage" title="NotifyFlow homepage">
             <span class="brand-mark">N</span><span class="brand-name">notify<span>flow</span></span>
           </a>
           <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-controls="sidebar" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar">«</button>
