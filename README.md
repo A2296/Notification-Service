@@ -15,7 +15,8 @@ Built with Node.js, Express 5, MongoDB (Mongoose), Nodemailer and Twilio.
   [API docs](https://notifyflow-labu.onrender.com/docs) ·
   [health](https://notifyflow-labu.onrender.com/health)
 - **Interactive API docs:** `/docs` (Swagger UI), raw spec at `/openapi.json`
-- **Deployment:** every merge to `main` is deployed automatically once CI passes
+- **Deployment:** once the Render deploy hook is set up, every merge to `main` that passes CI is
+  deployed automatically; until then, deploys are started by hand in Render
   ([how it works](#deployment), [full guide](docs/DEPLOYMENT.md))
 
 > The live demo runs on free hosting: after 15 minutes without visitors it sleeps, so the first
@@ -343,8 +344,8 @@ see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#4-turn-on-real-delivery-optional).
 
 ## Deployment
 
-The live demo runs on Render's free plan with a MongoDB Atlas database. Every merge to `main`
-is deployed by GitHub Actions:
+The live demo runs on Render's free plan with a MongoDB Atlas database. Once the deploy hook is
+set up, every merge to `main` is deployed by GitHub Actions:
 
 ```text
 merge to main ──► test (npm audit + 122 tests) ──► docker build ──► deploy
@@ -354,8 +355,9 @@ merge to main ──► test (npm audit + 122 tests) ──► docker build ─�
 ```
 
 - Nothing is deployed unless the tests and the Docker build pass.
-- The `deploy` job fails with a clear message if the deploy hook is not configured, or if the
-  new version is not live within 15 minutes, so an undeployed merge is never silent.
+- If the deploy hook is not configured, the `deploy` job is skipped and the run shows a warning
+  that `main` was not deployed. If the new version is not live within 15 minutes, the job fails.
+  Either way, an undeployed merge is never silent.
 - Deploys show under the repository's **Deployments → production**.
 - To check what is live: `curl https://notifyflow-labu.onrender.com/health`.
 - To deploy by hand or roll back: **Manual Deploy** in the Render dashboard.
