@@ -356,6 +356,28 @@ body {
   cursor:pointer;
   padding:5px
 }
+.auth-forgot-row:not(.hidden) {
+  display:flex;
+  justify-content:flex-end;
+  margin-top:12px
+}
+.auth-forgot-password {
+  border:1px solid #b7ded7;
+  border-radius:7px;
+  background:#effaf7;
+  color:#075b4c;
+  font:800 13px Manrope,Arial,sans-serif;
+  padding:9px 12px;
+  cursor:pointer
+}
+.auth-forgot-password:hover {
+  border-color:#087a66;
+  background:#e2f5f0
+}
+.auth-forgot-password:focus-visible {
+  outline:2px solid var(--teal-dark);
+  outline-offset:2px
+}
 .table-wrap {
   overflow-x:auto;
   padding:0

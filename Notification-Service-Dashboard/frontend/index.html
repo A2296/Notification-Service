@@ -561,7 +561,9 @@
         <label class="register-only hidden">Your name<input id="authName" type="text" maxlength="100" autocomplete="name" placeholder="Ada Lovelace" /></label>
         <label class="password-step auth-email-step">Work email<input id="authEmail" type="email" required maxlength="254" autocomplete="email" placeholder="you@company.com" /></label>
         <label class="password-step auth-password-step">Password<input id="authPassword" type="password" required maxlength="128" autocomplete="current-password" placeholder="Enter your password" /></label>
-        <button class="text-button auth-forgot-password" id="forgotPassword" type="button">Forgot password?</button>
+        <div class="auth-forgot-row">
+          <button class="auth-forgot-password" id="forgotPassword" type="button">Forgot your password?</button>
+        </div>
         <label class="code-step hidden">Authentication code<input id="authCode" type="text" inputmode="numeric" maxlength="20" autocomplete="one-time-code" placeholder="6-digit code or a recovery code" /></label>
         <div class="password-reset-confirm hidden" id="passwordResetConfirm">
           <label>New password<input id="resetNewPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" /></label>
