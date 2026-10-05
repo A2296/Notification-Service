@@ -457,6 +457,50 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /api/v1/auth/password-reset/request:
+    post:
+      tags: [Auth]
+      summary: Request password reset instructions
+      description: |
+        Always returns the same accepted response to avoid disclosing whether an email is
+        registered. Delivery requires EMAIL_PROVIDER=smtp, SMTP_HOST and PUBLIC_BASE_URL.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "202": { description: Instructions are sent if the account exists }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "503": { description: Password reset email is not configured }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/auth/password-reset/confirm:
+    post:
+      tags: [Auth]
+      summary: Set a new password using a reset token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, token, newPassword]
+              properties:
+                email: { type: string, format: email }
+                token: { type: string }
+                newPassword: { type: string, minLength: 8 }
+      responses:
+        "200": { description: Password reset; all existing sessions are revoked }
+        "400": { description: Invalid or expired token, or invalid request }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
   /api/v1/auth/login/mfa:
     post:
       tags: [Auth]
@@ -486,6 +530,31 @@ paths:
         "429": { description: Too many wrong codes; try again later }
 
   /api/v1/account:
+    delete:
+      tags: [Account]
+      summary: Delete your account and its business workspace
+      description: |
+        Requires the current password and the literal confirmation `DELETE`. Deletion is refused
+        if other users belong to the workspace. Removes its API keys, notifications, recipients,
+        schedules, user and business.
+      security:
+        - BearerAuth: []
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password, confirmation]
+              properties:
+                password: { type: string }
+                confirmation: { type: string, enum: [DELETE] }
+      responses:
+        "200": { description: Workspace and account deleted }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { description: Current password is not correct }
+        "409": { description: Workspace has other users }
     patch:
       tags: [Account]
       summary: Update your name
@@ -504,6 +573,17 @@ paths:
       responses:
         "200": { description: Updated user }
         "400": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/account/export:
+    get:
+      tags: [Account]
+      summary: Download your account and workspace data as JSON
+      security:
+        - BearerAuth: []
+        - SessionCookie: []
+      responses:
+        "200": { description: JSON export; excludes passwords and API secret hashes }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /api/v1/account/password:
     post:

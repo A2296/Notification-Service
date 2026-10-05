@@ -45,9 +45,21 @@ const loginBody = z.object({
   password: z.string().min(1).max(128),
 });
 
+const passwordResetRequestBody = z.object({ email });
+
+const passwordResetConfirmBody = z.object({
+  email,
+  token: z.string().min(32).max(256),
+  newPassword: z.string().min(8, "Password must be at least 8 characters").max(128),
+});
+
 // A 6-digit authenticator code or a recovery code ("3f9a1-c07b2")
 const mfaCode = z.string().trim().min(6).max(20);
 const currentPassword = z.string().min(1, "Enter your current password").max(128);
+const deleteAccountBody = z.object({
+  password: currentPassword,
+  confirmation: z.literal("DELETE", { error: "Type DELETE to confirm account deletion" }),
+});
 
 const mfaLoginBody = z.object({
   mfaToken: z.string().min(1).max(2000),
@@ -374,6 +386,8 @@ const adminNotificationsQuery = listNotificationsQuery.extend({
 module.exports = {
   registerBody,
   loginBody,
+  passwordResetRequestBody,
+  passwordResetConfirmBody,
   mfaLoginBody,
   updateProfileBody,
   changePasswordBody,
@@ -381,6 +395,7 @@ module.exports = {
   mfaConfirmBody,
   mfaDisableBody,
   businessSettingsBody,
+  deleteAccountBody,
   createApiKeyBody,
   createRecipientBody,
   updateRecipientBody,

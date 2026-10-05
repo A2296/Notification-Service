@@ -73,6 +73,9 @@ const state = {
   usage: null,
   // Between the password and the two-factor code; kept in memory only
   mfaToken: null,
+  passwordResetToken: null,
+  passwordResetEmail: null,
+  passwordResetMode: null,
   // Which part of the two-factor setup is showing (null = based on the account)
   mfaStep: null,
   idempotencyKey: null,
@@ -136,6 +139,20 @@ function openAuthFor(mode) {
 function enterApp(view = 'dashboard', authMode = 'login') {
   if (canEnterApp() || view === 'help') {
     showApplication(view);
+    return;
+  }
+
+  if (resetRequest) {
+    setButtonLabel(el('#authSubmit'), 'Send reset link');
+    el('#toggleAuth').textContent = 'Back to sign in';
+    el('#authMessage').textContent = '';
+    return;
+  }
+
+  if (resetConfirm) {
+    setButtonLabel(el('#authSubmit'), 'Reset password');
+    el('#toggleAuth').textContent = 'Back to sign in';
+    el('#authMessage').textContent = '';
     return;
   }
 
@@ -912,16 +929,27 @@ const authDialog = el('#authDialog');
 
 function updateAuthForm() {
   const codeStep = Boolean(state.mfaToken);
-  const register = registrationMode && !codeStep;
+  const resetMode = state.passwordResetMode;
+  const resetRequest = resetMode === 'request';
+  const resetConfirm = resetMode === 'confirm';
+  const register = registrationMode && !codeStep && !resetMode;
 
   el('#authTitle').textContent = codeStep
     ? 'Two-factor authentication'
+    : resetConfirm
+      ? 'Choose a new password'
+      : resetRequest
+        ? 'Reset your password'
     : register
       ? 'Create your business account'
       : 'Sign in to your workspace';
 
   el('#authDescription').textContent = codeStep
     ? 'Enter the 6-digit code from your authenticator app, or one of your recovery codes.'
+    : resetConfirm
+      ? 'Choose a new password for your account. This link expires after 30 minutes.'
+      : resetRequest
+        ? 'Enter your account email. If an account exists, we will send password reset instructions.'
     : register
       ? 'Register your business, then create credentials for your applications.'
       : 'Use your business account to securely manage notifications and API credentials.';
@@ -930,21 +958,35 @@ function updateAuthForm() {
     .querySelectorAll('.register-only')
     .forEach((field) => field.classList.toggle('hidden', !register));
   document
-    .querySelectorAll('.password-step')
-    .forEach((field) => field.classList.toggle('hidden', codeStep));
+    .querySelectorAll('.auth-email-step')
+    .forEach((field) => field.classList.toggle('hidden', codeStep || resetConfirm));
+  document
+    .querySelectorAll('.auth-password-step')
+    .forEach((field) => field.classList.toggle('hidden', codeStep || resetRequest || resetConfirm));
   document
     .querySelectorAll('.code-step')
     .forEach((field) => field.classList.toggle('hidden', !codeStep));
+  el('#passwordResetConfirm').classList.toggle('hidden', !resetConfirm);
+  el('#forgotPassword').classList.toggle('hidden', codeStep || register || Boolean(resetMode));
 
   el('#businessName').required = register;
   el('#authName').required = register;
-  el('#authEmail').required = !codeStep;
-  el('#authPassword').required = !codeStep;
+  el('#authEmail').required = !codeStep && !resetConfirm;
+  el('#authPassword').required = !codeStep && !resetRequest && !resetConfirm;
   el('#authCode').required = codeStep;
+  el('#resetNewPassword').required = resetConfirm;
+  el('#resetConfirmPassword').required = resetConfirm;
 
   if (codeStep) {
     setButtonLabel(el('#authSubmit'), 'Verify');
     el('#toggleAuth').textContent = 'Use a different account';
+    el('#authMessage').textContent = '';
+    return;
+  }
+
+  if (resetMode) {
+    setButtonLabel(el('#authSubmit'), resetConfirm ? 'Reset password' : 'Send reset link');
+    el('#toggleAuth').textContent = 'Back to sign in';
     el('#authMessage').textContent = '';
     return;
   }
@@ -976,11 +1018,23 @@ function openAuthDialog() {
   }
 }
 
+function clearPasswordResetAddress() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('passwordResetToken');
+  url.searchParams.delete('email');
+  history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
 async function submitAuth(event) {
   event.preventDefault();
 
   const message = el('#authMessage');
   const submit = el('#authSubmit');
+
+  if (state.passwordResetMode) {
+    await submitPasswordReset(message, submit);
+    return;
+  }
 
   if (state.mode === 'demo') {
     message.textContent =
@@ -1029,6 +1083,52 @@ async function submitAuth(event) {
         : 'Signed in successfully.'
     );
     finishSignIn(data.user);
+  } catch (error) {
+    message.textContent = error.message;
+  } finally {
+    setBusy(submit, false);
+  }
+}
+
+async function submitPasswordReset(message, submit) {
+  if (state.mode === 'demo') {
+    message.textContent = 'Password reset is available only when connected to the live service.';
+    return;
+  }
+
+  const resetConfirm = state.passwordResetMode === 'confirm';
+  const body = { email: el('#authEmail').value.trim() };
+
+  if (resetConfirm) {
+    if (el('#resetNewPassword').value !== el('#resetConfirmPassword').value) {
+      message.textContent = 'The new passwords do not match.';
+      return;
+    }
+
+    body.token = state.passwordResetToken;
+    body.newPassword = el('#resetNewPassword').value;
+  }
+
+  message.textContent = resetConfirm ? 'Resetting password…' : 'Requesting reset link…';
+  setBusy(submit, true);
+
+  try {
+    const response = await request(
+      `${API_BASE}/auth/password-reset/${resetConfirm ? 'confirm' : 'request'}`,
+      { method: 'POST', body }
+    );
+    message.textContent = response.message;
+
+    if (resetConfirm) {
+      state.passwordResetToken = null;
+      state.passwordResetMode = null;
+      state.passwordResetEmail = null;
+      el('#resetNewPassword').value = '';
+      el('#resetConfirmPassword').value = '';
+      clearPasswordResetAddress();
+      updateAuthForm();
+      message.textContent = response.message;
+    }
   } catch (error) {
     message.textContent = error.message;
   } finally {
@@ -2005,6 +2105,73 @@ function renderSettings() {
   renderLimits(settings);
 }
 
+async function exportAccountData() {
+  const output = el('#exportOutput');
+
+  if (!canChangeAccount(output)) {
+    return;
+  }
+
+  try {
+    const data = await callApi('/account/export');
+    const file = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(file);
+    const link = createElement('a');
+    link.href = url;
+    link.download = 'notifyflow-data-export.json';
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    output.textContent = 'Your data export has been downloaded.';
+  } catch (error) {
+    output.textContent = `Could not export data: ${error.message}`;
+  }
+}
+
+async function deleteAccount(event) {
+  event.preventDefault();
+
+  const output = el('#deleteAccountOutput');
+  if (!canChangeAccount(output)) {
+    return;
+  }
+
+  if (el('#deleteAccountConfirmation').value !== 'DELETE') {
+    output.textContent = 'Type DELETE exactly to confirm.';
+    return;
+  }
+
+  const confirmed = window.confirm(
+    'Permanently delete your account and all data in this business workspace? This cannot be undone.'
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  const submit = event.currentTarget.querySelector('[type="submit"]');
+  setBusy(submit, true);
+  output.textContent = 'Deleting your account and workspace data…';
+
+  try {
+    await callApi('/account', {
+      method: 'DELETE',
+      body: {
+        password: el('#deleteAccountPassword').value,
+        confirmation: el('#deleteAccountConfirmation').value
+      }
+    });
+    event.currentTarget.reset();
+    setSignedOut();
+    showLanding();
+    showToast('Your account and workspace data have been deleted.');
+  } catch (error) {
+    output.textContent = error.message;
+  } finally {
+    setBusy(submit, false);
+  }
+}
+
 async function loadSettings() {
   renderSettings();
 
@@ -2659,15 +2826,31 @@ authDialog.addEventListener('click', (event) => {
 el('#toggleAuth').addEventListener('click', () => {
   if (state.mfaToken) {
     state.mfaToken = null;
+  } else if (state.passwordResetMode) {
+    state.passwordResetMode = null;
+    state.passwordResetToken = null;
+    state.passwordResetEmail = null;
+    el('#resetNewPassword').value = '';
+    el('#resetConfirmPassword').value = '';
+    clearPasswordResetAddress();
   } else {
     registrationMode = !registrationMode;
   }
   updateAuthForm();
 });
+el('#forgotPassword').addEventListener('click', () => {
+  state.passwordResetMode = 'request';
+  registrationMode = false;
+  updateAuthForm();
+  el('#authEmail').focus();
+});
 // Closing the dialog abandons a half-finished two-factor sign-in
 authDialog.addEventListener('close', () => {
   state.mfaToken = null;
   el('#authCode').value = '';
+  if (state.passwordResetMode === 'request') {
+    state.passwordResetMode = null;
+  }
 });
 
 el('#copyKey').addEventListener('click', () => {
@@ -2696,6 +2879,8 @@ el('#profileForm').addEventListener('submit', saveProfile);
 el('#profileSignOut').addEventListener('click', signOut);
 el('#businessForm').addEventListener('submit', saveBusiness);
 el('#passwordForm').addEventListener('submit', changePassword);
+el('#exportData').addEventListener('click', exportAccountData);
+el('#deleteAccountForm').addEventListener('submit', deleteAccount);
 el('#mfaStartForm').addEventListener('submit', startMfaSetup);
 el('#mfaConfirmForm').addEventListener('submit', confirmMfaSetup);
 el('#mfaDisableForm').addEventListener('submit', disableMfa);
@@ -2726,6 +2911,15 @@ async function init() {
   updateScheduleForm();
   renderApiKeys();
 
+  const resetParams = new URLSearchParams(location.search);
+  state.passwordResetToken = resetParams.get('passwordResetToken');
+  state.passwordResetEmail = resetParams.get('email');
+  if (state.passwordResetToken && state.passwordResetEmail) {
+    state.passwordResetMode = 'confirm';
+    el('#authEmail').value = state.passwordResetEmail;
+    clearPasswordResetAddress();
+  }
+
   // Read before setView rewrites the address: #settings is an app page, #plans a homepage section
   const requested = location.hash.slice(1);
   setView(requested);
@@ -2745,10 +2939,17 @@ async function init() {
       showLanding(requested);
     }
 
+    if (state.passwordResetMode) {
+      openAuthDialog();
+    }
+
     return;
   }
 
   state.mode = 'live';
+  if (state.passwordResetMode) {
+    openAuthDialog();
+  }
 
   try {
     const { user } = await request(`${API_BASE}/auth/me`);

@@ -1,12 +1,17 @@
 const bcrypt = require("bcryptjs");
 const User = require("../models/userSchema");
 const Business = require("../models/businessSchema");
+const ApiKey = require("../models/apiKeySchema");
+const Notification = require("../models/notificationSchema");
+const Recipient = require("../models/recipientSchema");
+const Schedule = require("../models/scheduleSchema");
 const HttpError = require("../utils/httpError");
 const config = require("../config");
 const audit = require("../utils/audit");
 const mfaService = require("../services/mfaService");
 const { MAX_BULK_NOTIFICATIONS } = require("../validators/schemas");
 const { startSession, userResponse } = require("./authController");
+const { clearSessionCookie } = require("../utils/session");
 
 // The signed-in user's own account: profile, password, two-factor and business settings.
 // Dashboard session (or Bearer token) only; API keys cannot reach these routes.
@@ -43,6 +48,8 @@ const changePassword = async (req, res) => {
 
   user.password = await bcrypt.hash(newPassword, 10);
   user.tokenVersion += 1;
+  user.passwordResetTokenHash = null;
+  user.passwordResetExpiresAt = null;
   await user.save();
 
   audit("account.password.change", req, { userId: user._id });
@@ -158,6 +165,77 @@ const getSettings = async (req, res) => {
   });
 };
 
+const exportAccountData = async (req, res) => {
+  if (!req.business) {
+    throw new HttpError(403, "A business account is required to export workspace data");
+  }
+
+  const businessId = req.business._id;
+  const [user, apiKeys, notifications, recipients, schedules] = await Promise.all([
+    User.findById(req.user.id)
+      .select("name email role business createdAt updatedAt lastLoginAt")
+      .lean(),
+    ApiKey.find({ business: businessId }).select("-secretHash").lean(),
+    Notification.find({ business: businessId }).lean(),
+    Recipient.find({ business: businessId }).lean(),
+    Schedule.find({ business: businessId }).lean(),
+  ]);
+
+  res.setHeader("Content-Disposition", 'attachment; filename="notifyflow-data-export.json"');
+  res.status(200).json({
+    formatVersion: 1,
+    generatedAt: new Date().toISOString(),
+    account: user,
+    business: req.business.toJSON(),
+    apiKeys,
+    notifications,
+    recipients,
+    schedules,
+  });
+};
+
+const deleteAccount = async (req, res) => {
+  const { password } = req.validated.body;
+  const user = await loadUser(req);
+
+  if (user.role !== "USER" || !user.business) {
+    throw new HttpError(403, "Only a business account can be deleted here");
+  }
+
+  await requirePassword(user, password);
+
+  const otherUsers = await User.countDocuments({
+    business: user.business._id,
+    _id: { $ne: user._id },
+  });
+
+  if (otherUsers > 0) {
+    throw new HttpError(
+      409,
+      "This workspace has other users. Contact support to request workspace deletion."
+    );
+  }
+
+  const businessId = user.business._id;
+  audit("account.delete", req, { userId: user._id, businessId });
+
+  await Business.updateOne({ _id: businessId }, { status: "SUSPENDED" });
+  await Promise.all([
+    ApiKey.deleteMany({ business: businessId }),
+    Notification.deleteMany({ business: businessId }),
+    Recipient.deleteMany({ business: businessId }),
+    Schedule.deleteMany({ business: businessId }),
+  ]);
+  await User.deleteOne({ _id: user._id });
+  await Business.deleteOne({ _id: businessId });
+  clearSessionCookie(req, res);
+
+  res.status(200).json({
+    success: true,
+    message: "Your account and business workspace data have been deleted.",
+  });
+};
+
 module.exports = {
   updateProfile,
   changePassword,
@@ -166,4 +244,6 @@ module.exports = {
   disableMfa,
   updateBusiness,
   getSettings,
+  exportAccountData,
+  deleteAccount,
 };

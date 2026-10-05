@@ -339,6 +339,7 @@ All settings are environment variables, documented in [.env.example](.env.exampl
 Providers default to `console` (logged, not sent), so the service runs with no third-party
 accounts. Switch to real delivery with `EMAIL_PROVIDER=smtp` and `SMS_PROVIDER=twilio`;
 see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#4-turn-on-real-delivery-optional).
+Password reset emails also require SMTP delivery and `PUBLIC_BASE_URL` to point to this service.
 
 ---
 
@@ -555,4 +556,3 @@ Backend capstone project. Contributors (from the Git history; update each role a
 | Adeshinayomi | Repository configuration |
 | Bude1229 | Product features: Help & support page, in-app read rate, subscription plans and usage limits |
 | Macfrancis C. Nwaigwe dashtech-c | Frontend Developer: Designed and implemented the Notification Service dashboard, including business registration/sign-in, API connection settings, API credential management, notification composer, delivery activity tracking, and responsive user interface styling. |
-

@@ -1,4 +1,5 @@
 const bcrypt = require("bcryptjs");
+const crypto = require("node:crypto");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const User = require("../models/userSchema");
@@ -7,6 +8,7 @@ const HttpError = require("../utils/httpError");
 const config = require("../config");
 const audit = require("../utils/audit");
 const mfaService = require("../services/mfaService");
+const passwordResetEmail = require("../services/passwordResetEmail");
 const { setSessionCookie, clearSessionCookie } = require("../utils/session");
 
 const signToken = (user) =>
@@ -126,6 +128,87 @@ const loginUser = async (req, res) => {
   await completeLogin(req, res, user);
 };
 
+const requestPasswordReset = async (req, res) => {
+  if (
+    config.email.provider !== "smtp" ||
+    !config.email.smtp.host ||
+    !config.publicBaseUrl ||
+    !/^https?:\/\//i.test(config.publicBaseUrl)
+  ) {
+    throw new HttpError(503, "Password reset email is not configured. Contact support.");
+  }
+
+  const { email } = req.validated.body;
+  const user = await User.findOne({ email });
+
+  if (user) {
+    const token = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+    await User.updateOne(
+      { _id: user._id },
+      {
+        passwordResetTokenHash: tokenHash,
+        passwordResetExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
+      }
+    );
+
+    try {
+      await passwordResetEmail({
+        email: user.email,
+        token,
+        baseUrl: config.publicBaseUrl,
+        emailConfig: config.email,
+      });
+    } catch (error) {
+      await User.updateOne(
+        { _id: user._id, passwordResetTokenHash: tokenHash },
+        { $unset: { passwordResetTokenHash: 1, passwordResetExpiresAt: 1 } }
+      );
+      console.error(
+        JSON.stringify({
+          type: "error",
+          event: "auth.password_reset.email_failed",
+          code: error.code || "SMTP_ERROR",
+        })
+      );
+    }
+  }
+
+  res.status(202).json({
+    success: true,
+    message: "If an account exists for that email, password reset instructions will be sent.",
+  });
+};
+
+const confirmPasswordReset = async (req, res) => {
+  const { email, token, newPassword } = req.validated.body;
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  const user = await User.findOne({
+    email,
+    passwordResetTokenHash: tokenHash,
+    passwordResetExpiresAt: { $gt: new Date() },
+  }).select("+passwordResetTokenHash +passwordResetExpiresAt");
+
+  if (!user) {
+    throw new HttpError(400, "This password reset link is invalid or has expired.");
+  }
+
+  user.password = await bcrypt.hash(newPassword, 10);
+  user.tokenVersion += 1;
+  user.passwordResetTokenHash = null;
+  user.passwordResetExpiresAt = null;
+  await user.save();
+
+  clearSessionCookie(req, res);
+  audit("auth.password_reset.complete", req, { userId: user._id });
+
+  res.status(200).json({
+    success: true,
+    message: "Password reset. Sign in with your new password.",
+  });
+};
+
 // Second step of sign-in when two-factor authentication is on
 const loginWithMfa = async (req, res) => {
   const { mfaToken, code } = req.validated.body;
@@ -192,6 +275,8 @@ const logoutUser = async (req, res) => {
 module.exports = {
   registerBusiness,
   loginUser,
+  requestPasswordReset,
+  confirmPasswordReset,
   loginWithMfa,
   getMe,
   logoutUser,
