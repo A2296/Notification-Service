@@ -1,8 +1,12 @@
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
+const net = require("node:net");
 const { app, request, connect, disconnect, createBusiness } = require("./helpers");
 const User = require("../src/models/userSchema");
+const Business = require("../src/models/businessSchema");
+const ApiKey = require("../src/models/apiKeySchema");
 const totp = require("../src/utils/totp");
+const config = require("../src/config");
 
 before(() => connect(__filename));
 after(disconnect);
@@ -60,6 +64,56 @@ test("users can change their name", async () => {
   assert.equal(empty.status, 400);
 });
 
+test("users can download a data export without account or API-key secrets", async () => {
+  const acme = await createBusiness("Acme");
+
+  const exported = await request(app).get("/api/v1/account/export").set(acme.jwtHeaders);
+
+  assert.equal(exported.status, 200);
+  assert.equal(exported.headers["content-disposition"], 'attachment; filename="notifyflow-data-export.json"');
+  assert.equal(exported.body.account.email, acme.email);
+  assert.equal(exported.body.account.password, undefined);
+  assert.equal(exported.body.apiKeys.length, 1);
+  assert.equal(exported.body.apiKeys[0].secretHash, undefined);
+  assert.ok(Array.isArray(exported.body.notifications));
+  assert.ok(Array.isArray(exported.body.recipients));
+  assert.ok(Array.isArray(exported.body.schedules));
+});
+
+test("account deletion requires password and confirmation, then removes the workspace", async () => {
+  const acme = await createBusiness("Acme");
+  const remove = (body) =>
+    request(app).delete("/api/v1/account").set(acme.jwtHeaders).send(body);
+
+  assert.equal((await remove({ password: "wrong", confirmation: "DELETE" })).status, 401);
+  assert.equal((await remove({ password: PASSWORD, confirmation: "no" })).status, 400);
+
+  const deleted = await remove({ password: PASSWORD, confirmation: "DELETE" });
+  assert.equal(deleted.status, 200);
+  assert.equal(await User.findOne({ email: acme.email }), null);
+  assert.equal(await Business.findById(acme.businessId), null);
+  assert.equal(await ApiKey.countDocuments({ business: acme.businessId }), 0);
+  assert.equal((await request(app).get("/api/v1/auth/me").set(acme.jwtHeaders)).status, 401);
+});
+
+test("workspace deletion is blocked while other users still belong to the workspace", async () => {
+  const acme = await createBusiness("Acme");
+  await User.create({
+    name: "Second user",
+    email: "second-user@example.test",
+    password: "not-used-in-this-test",
+    business: acme.businessId,
+  });
+
+  const blocked = await request(app)
+    .delete("/api/v1/account")
+    .set(acme.jwtHeaders)
+    .send({ password: PASSWORD, confirmation: "DELETE" });
+
+  assert.equal(blocked.status, 409);
+  assert.ok(await Business.findById(acme.businessId));
+});
+
 test("changing the password needs the current one and signs out other devices", async () => {
   const acme = await createBusiness("Acme");
   const otherDevice = bearer((await login(acme.email)).body.token);
@@ -81,6 +135,98 @@ test("changing the password needs the current one and signs out other devices", 
   assert.equal((await request(app).get("/api/v1/auth/me").set(bearer(changed.body.token))).status, 200);
   assert.equal((await login(acme.email)).status, 401);
   assert.equal((await login(acme.email, "NewPassword456")).status, 200);
+});
+
+test("password reset sends a single-use link and revokes existing sessions", async () => {
+  let message = "";
+  const smtp = net.createServer((socket) => {
+    let dataMode = false;
+    let pending = "";
+    socket.write("220 test SMTP ready\r\n");
+
+    socket.on("data", (chunk) => {
+      pending += chunk.toString();
+      const lines = pending.split("\r\n");
+      pending = lines.pop();
+
+      for (const line of lines) {
+        if (dataMode) {
+          if (line === ".") {
+            dataMode = false;
+            socket.write("250 queued\r\n");
+          } else {
+            message += `${line}\n`;
+          }
+        } else if (line.startsWith("EHLO") || line.startsWith("HELO")) {
+          socket.write("250 test\r\n");
+        } else if (line.startsWith("MAIL FROM") || line.startsWith("RCPT TO")) {
+          socket.write("250 accepted\r\n");
+        } else if (line === "DATA") {
+          dataMode = true;
+          socket.write("354 send message\r\n");
+        } else if (line === "QUIT") {
+          socket.write("221 bye\r\n");
+          socket.end();
+        }
+      }
+    });
+  });
+
+  await new Promise((resolve) => smtp.listen(0, "127.0.0.1", resolve));
+  const originalEmail = { ...config.email, smtp: { ...config.email.smtp } };
+  const originalBaseUrl = config.publicBaseUrl;
+
+  try {
+    config.email.provider = "smtp";
+    config.email.smtp.host = "127.0.0.1";
+    config.email.smtp.port = smtp.address().port;
+    config.email.smtp.secure = false;
+    config.email.smtp.user = undefined;
+    config.email.smtp.pass = undefined;
+    config.publicBaseUrl = "http://notifyflow.test";
+
+    const acme = await createBusiness("Acme");
+    const requested = await request(app)
+      .post("/api/v1/auth/password-reset/request")
+      .send({ email: acme.email });
+    assert.equal(requested.status, 202);
+    assert.match(requested.body.message, /If an account exists/i);
+
+    assert.match(message, /Reset your NotifyFlow password/i);
+    const decodedMessage = message
+      .replace(/=\n/g, "")
+      .replace(/=([a-f\d]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+    const token = decodedMessage.match(/passwordResetToken=([a-f\d]{64})&/i)?.[1];
+    assert.ok(token, "reset email contains a high-entropy token");
+
+    const stored = await User.findOne({ email: acme.email }).select(
+      "+passwordResetTokenHash +passwordResetExpiresAt"
+    );
+    assert.notEqual(stored.passwordResetTokenHash, token);
+    assert.ok(stored.passwordResetExpiresAt > new Date());
+
+    const reset = await request(app)
+      .post("/api/v1/auth/password-reset/confirm")
+      .send({ email: acme.email, token, newPassword: "NewPassword456" });
+    assert.equal(reset.status, 200);
+
+    assert.equal((await request(app).get("/api/v1/auth/me").set(acme.jwtHeaders)).status, 401);
+    assert.equal((await request(app).post("/api/v1/auth/login").send({
+      email: acme.email,
+      password: "NewPassword456",
+    })).status, 200);
+    assert.equal((await request(app).post("/api/v1/auth/password-reset/confirm").send({
+      email: acme.email,
+      token,
+      newPassword: "AnotherPassword789",
+    })).status, 400);
+  } finally {
+    config.email.provider = originalEmail.provider;
+    config.email.from = originalEmail.from;
+    config.email.smtp = originalEmail.smtp;
+    config.publicBaseUrl = originalBaseUrl;
+    await new Promise((resolve) => smtp.close(resolve));
+  }
 });
 
 test("two-factor setup needs the password and a working code", async () => {

@@ -12,6 +12,7 @@ const {
   mfaConfirmBody,
   mfaDisableBody,
   businessSettingsBody,
+  deleteAccountBody,
 } = require("../validators/schemas");
 const {
   updateProfile,
@@ -21,6 +22,8 @@ const {
   disableMfa,
   updateBusiness,
   getSettings,
+  exportAccountData,
+  deleteAccount,
 } = require("../controllers/accountController");
 
 // The signed-in user's own account (dashboard session or Bearer token, never an API key).
@@ -40,5 +43,9 @@ router.post("/mfa/disable", authLimiter, validate({ body: mfaDisableBody }), dis
 router.patch("/business", validate({ body: businessSettingsBody }), updateBusiness);
 
 router.get("/settings", getSettings);
+
+router.get("/export", exportAccountData);
+
+router.delete("/", authLimiter, validate({ body: deleteAccountBody }), deleteAccount);
 
 module.exports = router;

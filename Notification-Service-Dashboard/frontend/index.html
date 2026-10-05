@@ -495,6 +495,20 @@
               <div class="form-actions"><span></span><button class="danger-button" id="signOutEverywhere" type="button">Sign out everywhere</button></div>
             </section>
 
+            <section class="content-card settings-form full-span" id="privacyCard">
+              <p class="eyebrow">PRIVACY &amp; DATA</p><h3>Your data</h3>
+              <p class="subtle">Download a copy of your account and workspace data, including notifications, recipients, schedules and API key details. API secrets are never included.</p>
+              <div class="form-actions"><output id="exportOutput" aria-live="polite"></output><button class="secondary-button" id="exportData" type="button">Download my data</button></div>
+            </section>
+
+            <form class="content-card settings-form full-span" id="deleteAccountForm">
+              <p class="eyebrow">DANGER ZONE</p><h3>Delete account and workspace</h3>
+              <p class="subtle">This permanently deletes your login, business workspace, API keys, notifications, recipients and schedules. This action cannot be undone. If other users belong to the workspace, deletion must be arranged with support.</p>
+              <label>Current password<input id="deleteAccountPassword" type="password" required maxlength="128" autocomplete="current-password" /></label>
+              <label>Type DELETE to confirm<input id="deleteAccountConfirmation" type="text" required pattern="DELETE" autocomplete="off" /></label>
+              <div class="form-actions"><output id="deleteAccountOutput" aria-live="polite"></output><button class="danger-button" type="submit">Permanently delete workspace</button></div>
+            </form>
+
             <section class="content-card settings-form">
               <p class="eyebrow">DELIVERY</p><h3>Delivery channels</h3>
               <p class="subtle">Set by whoever runs this Notification Service. Channels that are not live only log messages.</p>
@@ -545,9 +559,14 @@
         <p class="subtle">New to NotifyFlow? <a class="inline-link" href="#help" id="authHelpLink">See how it works</a></p>
         <label class="register-only hidden">Business name<input id="businessName" type="text" maxlength="100" autocomplete="organization" placeholder="Acme Inc." /></label>
         <label class="register-only hidden">Your name<input id="authName" type="text" maxlength="100" autocomplete="name" placeholder="Ada Lovelace" /></label>
-        <label class="password-step">Work email<input id="authEmail" type="email" required maxlength="254" autocomplete="email" placeholder="you@company.com" /></label>
-        <label class="password-step">Password<input id="authPassword" type="password" required maxlength="128" autocomplete="current-password" placeholder="Enter your password" /></label>
+        <label class="password-step auth-email-step">Work email<input id="authEmail" type="email" required maxlength="254" autocomplete="email" placeholder="you@company.com" /></label>
+        <label class="password-step auth-password-step">Password<input id="authPassword" type="password" required maxlength="128" autocomplete="current-password" placeholder="Enter your password" /></label>
+        <button class="text-button auth-forgot-password" id="forgotPassword" type="button">Forgot password?</button>
         <label class="code-step hidden">Authentication code<input id="authCode" type="text" inputmode="numeric" maxlength="20" autocomplete="one-time-code" placeholder="6-digit code or a recovery code" /></label>
+        <div class="password-reset-confirm hidden" id="passwordResetConfirm">
+          <label>New password<input id="resetNewPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" /></label>
+          <label>Confirm new password<input id="resetConfirmPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" /></label>
+        </div>
         <output class="form-error" id="authMessage"></output>
         <div class="dialog-actions auth-actions"><button class="text-button" type="button" id="toggleAuth">Create an account</button><button class="primary-button" type="submit" value="default" id="authSubmit">Sign in <span>→</span></button></div>
       </form>
