@@ -142,20 +142,6 @@ function enterApp(view = 'dashboard', authMode = 'login') {
     return;
   }
 
-  if (resetRequest) {
-    setButtonLabel(el('#authSubmit'), 'Send reset link');
-    el('#toggleAuth').textContent = 'Back to sign in';
-    el('#authMessage').textContent = '';
-    return;
-  }
-
-  if (resetConfirm) {
-    setButtonLabel(el('#authSubmit'), 'Reset password');
-    el('#toggleAuth').textContent = 'Back to sign in';
-    el('#authMessage').textContent = '';
-    return;
-  }
-
   viewAfterSignIn = view;
   openAuthFor(authMode);
 }
