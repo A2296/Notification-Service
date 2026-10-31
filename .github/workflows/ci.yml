@@ -31,6 +31,8 @@ jobs:
 
       - run: npm audit --omit=dev --audit-level=high
 
+      - run: npm run lint
+
       - run: npm test
         env:
           TEST_DB_URL: mongodb://localhost:27017/notification_service_test

@@ -45,7 +45,7 @@ const authMiddleware = async (req, res, next) => {
       issuer: config.jwt.issuer,
       audience: config.jwt.audience,
     });
-  } catch (error) {
+  } catch {
     return unauthorized(res);
   }
 
