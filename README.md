@@ -44,9 +44,9 @@ Built with Node.js, Express 5, MongoDB (Mongoose), Nodemailer and Twilio.
 | Validation | Every request is validated with zod and returns field-level error messages |
 | Security | Helmet headers and a strict CSP for the dashboard, CSRF protection, per-IP login rate limit, per-business API rate limit, NoSQL/regex injection protection, bcrypt passwords, audit log |
 | Dashboard | Business web dashboard served by the API at `/` (see below) |
-| Operations | Docker, docker-compose (with a local email inbox), `/health` (including the deployed commit), graceful shutdown, GitHub Actions CI with automatic deploys to Render, Render blueprint |
+| Operations | Docker, docker-compose (with a local email inbox), `/health` (including the deployed commit), graceful shutdown, GitHub Actions CI (audit, lint, tests, Docker build) that deploys `main` to Render once the deploy hook is set up, Render blueprint |
 | Accounts | Profile, business details, plan and usage, password change (signs out other devices), two-factor authentication, delivery and limits overview |
-| Docs & tests | OpenAPI 3 spec + Swagger UI; 122 tests |
+| Docs & tests | OpenAPI 3 spec + Swagger UI; 126 tests that run without Docker; ESLint |
 
 ---
 
@@ -349,9 +349,9 @@ The live demo runs on Render's free plan with a MongoDB Atlas database. Once the
 set up, every merge to `main` is deployed by GitHub Actions:
 
 ```text
-merge to main ──► test (npm audit + 122 tests) ──► docker build ──► deploy
-                                                                       │
-     Render deploy hook, pinned to the tested commit ◄─────────────────┘
+merge to main ──► test (npm audit + lint + 126 tests) ──► docker build ──► deploy
+                                                                              │
+     Render deploy hook, pinned to the tested commit ◄────────────────────────┘
      then wait until GET /health reports that commit ("commit": "<sha>")
 ```
 
@@ -467,25 +467,36 @@ unverified number). Fix the setting, then click **Retry** on that notification.
 
 ## Testing
 
-These commands work the same in bash and PowerShell:
+No Docker or database needed. These commands work the same in bash and PowerShell:
 
 ```bash
 npm install
+npm test        # 126 tests, about a minute
+npm run lint    # ESLint
+```
+
+Each test file starts its own in-memory MongoDB
+([mongodb-memory-server](https://github.com/typegoose/mongodb-memory-server)), so tests never
+touch your data and need nothing running. `npm install` downloads the MongoDB binary once
+(under 100 MB, cached under `node_modules/.cache`). To run against a real MongoDB instead, as CI
+does with `mongo:7`, set `TEST_DB_URL`:
+
+```bash
 docker run -d -p 27017:27017 --name mongo-test mongo:7
-npm test
+TEST_DB_URL=mongodb://localhost:27017/notification_service_test npm test   # bash
 docker rm -f mongo-test     # when you're done
 ```
 
-If port 27017 is already in use (for example by a local MongoDB), stop that first or point the
-tests elsewhere with `TEST_DB_URL`.
+In PowerShell: `$env:TEST_DB_URL = "mongodb://localhost:27017/notification_service_test"; npm test`.
 
-122 tests run against a real MongoDB (override with `TEST_DB_URL`), covering auth,
+126 tests run against a real MongoDB, covering auth,
 sessions and logout, two-factor authentication (RFC 6238 test vectors, replay, lockout), JWT tampering, the dashboard CSP, API keys, sending on every channel,
 bulk sends, recurring schedules (timezones, daylight saving, crash safety), retries and failures,
 scheduling, crash recovery, idempotency, tenant isolation, plan limits (single, bulk and scheduled
 sends, month boundaries, plan changes), admin controls, rate limits and webhook signatures. Providers are swapped for fakes, so no email
-or SMS is sent; the SMTP provider itself is tested against in-process fake mail servers. GitHub Actions runs the tests, `npm audit` and a
-Docker build on every pull request, and on `main` also deploys to Render (see [Deployment](#deployment)).
+or SMS is sent; the SMTP provider itself is tested against in-process fake mail servers. GitHub Actions runs `npm audit`, ESLint, the tests and a
+Docker build on every pull request, and on `main` also deploys to Render once the deploy hook is set
+up (see [Deployment](#deployment)).
 
 ---
 
@@ -512,14 +523,15 @@ Docker build on every pull request, and on `main` also deploys to Render (see [D
 │   └── utils/                  API keys, session cookie, audit log, recurrence rules, two-factor codes, encryption, HttpError
 ├── scripts/createAdmin.js      Create a platform admin
 ├── docs/                       openapi.yaml, DEPLOYMENT.md
-├── test/                       Integration tests (node:test + supertest)
+├── test/                       Integration tests (node:test + supertest, in-memory MongoDB)
+├── eslint.config.js            Lint rules (npm run lint)
 ├── Dockerfile, docker-compose.yml, render.yaml
 ├── Notification-Service-Dashboard/frontend/   Business dashboard, served by the API at /
 │   ├── index.html              Markup, navigation, forms, dialogs and tables
 │   ├── app.js                  UI behavior and same-origin API client
 │   ├── styles.css, auth.css    Layout, responsive design and component styles
 │   └── README.md               Frontend documentation
-└── .github/workflows/ci.yml    Tests, Docker build, deploy of main to Render
+└── .github/workflows/ci.yml    Audit, lint, tests, Docker build, deploy of main to Render
 ```
 
 Express 5 forwards errors thrown in async handlers to `errorMiddleware` automatically, so

@@ -1,5 +1,7 @@
 const HttpError = require("../utils/httpError");
 
+// Express only treats middleware with four parameters as an error handler, so `next` stays
+// eslint-disable-next-line no-unused-vars
 const errorMiddleware = (err, req, res, next) => {
   // Malformed JSON body
   if (err.type === "entity.parse.failed") {

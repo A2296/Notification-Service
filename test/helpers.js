@@ -1,5 +1,6 @@
 // Shared test setup. Each test file runs in its own process with its own database.
-// Local: docker run -d -p 27017:27017 mongo:7 && npm test
+// Local: npm test (each file starts an in-memory MongoDB, no Docker or database needed)
+// Real MongoDB: TEST_DB_URL=mongodb://localhost:27017/notification_service_test npm test (CI)
 process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = process.env.JWT_SECRET || "test-secret";
 process.env.AUTH_RATE_LIMIT_MAX = process.env.AUTH_RATE_LIMIT_MAX || "1000";
@@ -14,8 +15,19 @@ const bcrypt = require("bcryptjs");
 const app = require("../app");
 const User = require("../src/models/userSchema");
 
+// Only set when this file started its own in-memory MongoDB (TEST_DB_URL unset)
+let memoryServer = null;
+
 const connect = async (testFile) => {
-  const base = process.env.TEST_DB_URL || "mongodb://localhost:27017/notification_service_test";
+  let base = process.env.TEST_DB_URL;
+
+  if (!base) {
+    // Loaded lazily: CI points TEST_DB_URL at a real mongo:7 service instead
+    const { MongoMemoryServer } = require("mongodb-memory-server");
+    memoryServer = await MongoMemoryServer.create();
+    base = `${memoryServer.getUri()}notification_service_test`;
+  }
+
   const dbName = `${base.split("/").pop().split("?")[0]}_${path.basename(testFile, ".test.js")}`;
   const url = base.replace(/\/[^/?]*(\?|$)/, `/${dbName}$1`);
 
@@ -28,6 +40,11 @@ const connect = async (testFile) => {
 const disconnect = async () => {
   await mongoose.connection.dropDatabase();
   await mongoose.disconnect();
+
+  if (memoryServer) {
+    await memoryServer.stop();
+    memoryServer = null;
+  }
 };
 
 let counter = 0;

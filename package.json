@@ -4,6 +4,7 @@
   "main": "src/server.js",
   "scripts": {
     "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
+    "lint": "eslint .",
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "seed:admin": "node scripts/createAdmin.js",
@@ -14,6 +15,10 @@
   "license": "ISC",
   "description": "Multi-tenant notification service: email, SMS and in-app notifications via API keys",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.14.0",
+    "globals": "^17.13.0",
+    "mongodb-memory-server": "^11.3.0",
     "nodemon": "^3.1.14",
     "supertest": "^7.3.0"
   },
